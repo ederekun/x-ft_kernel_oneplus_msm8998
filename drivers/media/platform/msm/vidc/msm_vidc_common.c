@@ -1140,7 +1140,7 @@ static void handle_event_change(enum hal_command_response cmd, void *data)
 				__func__, inst, &event_notify->packet_buffer,
 				&event_notify->extra_data_buffer);
 
-		if (inst->state == MSM_VIDC_CORE_INVALID ||
+		if (inst->state >= MSM_VIDC_STOP ||
 				inst->core->state == VIDC_CORE_INVALID) {
 			dprintk(VIDC_DBG,
 					"Event release buf ref received in invalid state - discard\n");
@@ -1262,8 +1262,6 @@ static void handle_event_change(enum hal_command_response cmd, void *data)
 		inst->prop.height[OUTPUT_PORT] = event_notify->height;
 		inst->prop.width[OUTPUT_PORT] = event_notify->width;
 	}
-
-	inst->seqchanged_count++;
 
 	if (inst->session_type == MSM_VIDC_DECODER)
 		msm_dcvs_init_load(inst);
@@ -2106,7 +2104,7 @@ static void handle_fbd(enum hal_command_response cmd, void *data)
 		vb->timestamp = (time_usec * NSEC_PER_USEC);
 		vbuf->flags = 0;
 		extra_idx =
-			EXTRADATA_IDX(inst->fmts[CAPTURE_PORT].num_planes);
+			EXTRADATA_IDX(inst->prop.num_planes[CAPTURE_PORT]);
 		if (extra_idx && extra_idx < VIDEO_MAX_PLANES) {
 			vb->planes[extra_idx].m.userptr =
 				(unsigned long)fill_buf_done->extra_data_buffer;
@@ -2309,11 +2307,32 @@ void handle_cmd_response(enum hal_command_response cmd, void *data)
 
 int msm_comm_scale_clocks(struct msm_vidc_core *core)
 {
-	int num_mbs_per_sec =
-		msm_comm_get_load(core, MSM_VIDC_ENCODER, LOAD_CALC_NO_QUIRKS) +
+	int num_mbs_per_sec, enc_mbs_per_sec, dec_mbs_per_sec;
+
+	enc_mbs_per_sec =
+		msm_comm_get_load(core, MSM_VIDC_ENCODER, LOAD_CALC_NO_QUIRKS);
+	dec_mbs_per_sec	=
 		msm_comm_get_load(core, MSM_VIDC_DECODER, LOAD_CALC_NO_QUIRKS);
+
+	if (enc_mbs_per_sec >= dec_mbs_per_sec) {
+	/*
+	 * If Encoder load is higher, use that load. Encoder votes for higher
+	 * clock. Since Encoder and Deocder run on parallel cores, this clock
+	 * should suffice decoder usecases.
+	 */
+		num_mbs_per_sec = enc_mbs_per_sec;
+	} else {
+	/*
+	 * If Decoder load is higher, it's tricky to decide clock. Decoder
+	 * higher load might results less clocks than Encoder smaller load.
+	 * At this point driver doesn't know which clock to vote. Hence use
+	 * total load.
+	 */
+		num_mbs_per_sec = enc_mbs_per_sec + dec_mbs_per_sec;
+	}
+
 	return msm_comm_scale_clocks_load(core, num_mbs_per_sec,
-				LOAD_CALC_NO_QUIRKS);
+			LOAD_CALC_NO_QUIRKS);
 }
 
 int msm_comm_scale_clocks_load(struct msm_vidc_core *core,
@@ -3280,9 +3299,9 @@ static bool reuse_internal_buffers(struct msm_vidc_inst *inst,
 	return reused;
 }
 
-static int allocate_and_set_internal_bufs(struct msm_vidc_inst *inst,
+int allocate_and_set_internal_bufs(struct msm_vidc_inst *inst,
 			struct hal_buffer_requirements *internal_bufreq,
-			struct msm_vidc_list *buf_list)
+			struct msm_vidc_list *buf_list, bool set_on_fw)
 {
 	struct internal_buf *binfo;
 	u32 smem_flags = SMEM_UNCACHED;
@@ -3316,10 +3335,13 @@ static int allocate_and_set_internal_bufs(struct msm_vidc_inst *inst,
 
 		binfo->buffer_type = internal_bufreq->buffer_type;
 
-		rc = set_internal_buf_on_fw(inst, internal_bufreq->buffer_type,
-				&binfo->smem, false);
-		if (rc)
-			goto fail_set_buffers;
+		if (set_on_fw) {
+			rc = set_internal_buf_on_fw(inst, 
+					internal_bufreq->buffer_type,
+					&binfo->smem, false);
+			if (rc)
+				goto fail_set_buffers;
+		}
 
 		mutex_lock(&buf_list->lock);
 		list_add_tail(&binfo->list, &buf_list->list);
@@ -3361,7 +3383,7 @@ static int set_internal_buffers(struct msm_vidc_inst *inst,
 		return 0;
 
 	return allocate_and_set_internal_bufs(inst, internal_buf,
-				buf_list);
+				buf_list, true);
 }
 
 int msm_comm_try_state(struct msm_vidc_inst *inst, int state)
@@ -3522,39 +3544,6 @@ int msm_vidc_comm_cmd(void *instance, union msm_v4l2_cmd *cmd)
 				"Failed to flush buffers: %d\n", rc);
 		}
 		break;
-	case V4L2_DEC_QCOM_CMD_RECONFIG_HINT:
-	{
-		u32 *ptr = NULL;
-		struct hal_buffer_requirements *output_buf;
-
-		rc = msm_comm_try_get_bufreqs(inst);
-		if (rc) {
-			dprintk(VIDC_ERR,
-					"Getting buffer requirements failed: %d\n",
-					rc);
-			break;
-		}
-
-		output_buf = get_buff_req_buffer(inst,
-				msm_comm_get_hal_output_buffer(inst));
-		if (output_buf) {
-			if (dec) {
-				ptr = (u32 *)dec->raw.data;
-				ptr[0] = output_buf->buffer_size;
-				ptr[1] = output_buf->buffer_count_actual;
-				dprintk(VIDC_DBG,
-					"Reconfig hint, size is %u, count is %u\n",
-					ptr[0], ptr[1]);
-			} else {
-				dprintk(VIDC_ERR, "Null decoder\n");
-			}
-		} else {
-			dprintk(VIDC_DBG,
-					"This output buffer not required, buffer_type: %x\n",
-					HAL_BUFFER_OUTPUT);
-		}
-		break;
-	}
 	case V4L2_DEC_CMD_STOP:
 	{
 		struct vidc_frame_data data = {0};
@@ -3680,7 +3669,7 @@ static void populate_frame_data(struct vidc_frame_data *data,
 		data->buffer_type = msm_comm_get_hal_output_buffer(inst);
 	}
 
-	extra_idx = EXTRADATA_IDX(inst->fmts[port].num_planes);
+	extra_idx = EXTRADATA_IDX(inst->prop.num_planes[port]);
 	if (extra_idx && extra_idx < VIDEO_MAX_PLANES &&
 			vb->planes[extra_idx].m.userptr) {
 		data->extradata_addr = vb->planes[extra_idx].m.userptr;
@@ -4458,8 +4447,8 @@ error:
 	return rc;
 }
 
-int msm_comm_set_scratch_buffers(struct msm_vidc_inst *inst)
-{
+int msm_comm_set_scratch_buffers(struct msm_vidc_inst *inst,
+						bool max_int_buffer) {
 	int rc = 0;
 
 	if (!inst || !inst->core || !inst->core->device) {
@@ -4467,7 +4456,7 @@ int msm_comm_set_scratch_buffers(struct msm_vidc_inst *inst)
 		return -EINVAL;
 	}
 
-	if (msm_comm_release_scratch_buffers(inst, true))
+	if (!max_int_buffer && msm_comm_release_scratch_buffers(inst, true))
 		dprintk(VIDC_WARN, "Failed to release scratch buffers\n");
 
 	rc = set_internal_buffers(inst, HAL_BUFFER_INTERNAL_SCRATCH,
@@ -4532,10 +4521,15 @@ static void msm_comm_flush_in_invalid_state(struct msm_vidc_inst *inst)
 			struct vb2_buffer *vb = container_of(ptr,
 					struct vb2_buffer, queued_entry);
 
-			vb->planes[0].bytesused = 0;
-			vb->planes[0].data_offset = 0;
-
-			vb2_buffer_done(vb, VB2_BUF_STATE_DONE);
+			if (vb->state == VB2_BUF_STATE_ACTIVE) {
+				vb->planes[0].bytesused = 0;
+				vb->planes[0].data_offset = 0;
+				vb2_buffer_done(vb, VB2_BUF_STATE_DONE);
+			} else {
+				dprintk(VIDC_WARN,
+					"%s VB is in state %d not in ACTIVE state\n"
+					, __func__, vb->state);
+			}
 		}
 		mutex_unlock(&inst->bufq[port].lock);
 	}
@@ -5016,6 +5010,9 @@ int msm_vidc_check_session_supported(struct msm_vidc_inst *inst)
 		return -ENOTSUPP;
 	}
 
+	if (!rc)
+		msm_dcvs_try_enable(inst);
+
 	if (!rc) {
 		if (inst->prop.width[CAPTURE_PORT] < capability->width.min ||
 			inst->prop.height[CAPTURE_PORT] <
@@ -5318,6 +5315,7 @@ int msm_vidc_comm_s_parm(struct msm_vidc_inst *inst, struct v4l2_streamparm *a)
 			msm_dcvs_init_load(inst);
 		}
 		msm_comm_scale_clocks_and_bus(inst);
+		msm_dcvs_try_enable(inst);
 	}
 exit:
 	return rc;
