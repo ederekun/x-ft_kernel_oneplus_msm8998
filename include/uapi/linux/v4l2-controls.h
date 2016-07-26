@@ -1356,6 +1356,9 @@ enum vl42_mpeg_vidc_video_enable_initial_qp {
 #define V4L2_CID_MPEG_VIDC_VIDEO_PERF_MODE	 \
 		(V4L2_CID_MPEG_MSM_VIDC_BASE + 149)
 enum v4l2_mpeg_vidc_video_perf_mode {
+#define V4L2_MPEG_VIDC_VIDEO_PERF_UNINIT \
+	V4L2_MPEG_VIDC_VIDEO_PERF_UNINIT
+	V4L2_MPEG_VIDC_VIDEO_PERF_UNINIT = 0,
 	V4L2_MPEG_VIDC_VIDEO_PERF_MAX_QUALITY = 1,
 	V4L2_MPEG_VIDC_VIDEO_PERF_POWER_SAVE = 2
 };
@@ -1443,6 +1446,13 @@ enum vl42_mpeg_vidc_video_h264_svc_nal {
 enum v4l2_mpeg_vidc_video_h264_vui_timing_info {
 	V4L2_MPEG_VIDC_VIDEO_H264_VUI_TIMING_INFO_DISABLED = 0,
 	V4L2_MPEG_VIDC_VIDEO_H264_VUI_TIMING_INFO_ENABLED = 1
+};
+
+#define V4L2_CID_MPEG_VIDC_VIDEO_SEND_SKIPPED_FRAME \
+		(V4L2_CID_MPEG_MSM_VIDC_BASE + 103)
+enum v4l2_mpeg_vidc_video_venc_send_skipped_frame {
+	V4L2_MPEG_VIDC_VIDEO_SEND_SKIPPED_FRAME_DISABLE = 0,
+	V4L2_MPEG_VIDC_VIDEO_SEND_SKIPPED_FRAME_ENABLE = 1
 };
 
 /*  Camera class control IDs */
