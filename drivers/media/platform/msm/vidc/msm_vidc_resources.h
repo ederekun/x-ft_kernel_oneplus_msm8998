@@ -17,6 +17,7 @@
 #include <linux/devfreq.h>
 #include <linux/platform_device.h>
 #include <media/msm_vidc.h>
+#include "soc/qcom/cx_ipeak.h"
 #define MAX_BUFFER_TYPES 32
 #define VENUS_SID_MAX 32
 
@@ -113,6 +114,8 @@ struct clock_info {
 	struct load_freq_table *load_freq_tbl;
 	u32 count;
 	bool has_scaling;
+	bool has_mem_retention;
+	unsigned long rate_on_enable;
 };
 
 struct clock_set {
@@ -200,6 +203,8 @@ struct msm_vidc_platform_resources {
 	uint32_t pm_qos_latency_us;
 	uint32_t max_inst_count;
 	uint32_t max_secure_inst_count;
+	uint32_t clk_freq_threshold;
+	struct cx_ipeak_client *cx_ipeak_context;
 	bool cma_status;
 };
 

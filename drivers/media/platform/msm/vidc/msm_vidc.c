@@ -118,6 +118,34 @@ int msm_vidc_enum_fmt(void *instance, struct v4l2_fmtdesc *f)
 }
 EXPORT_SYMBOL(msm_vidc_enum_fmt);
 
+int msm_vidc_query_ctrl(void *instance, struct v4l2_queryctrl *ctrl)
+{
+	struct msm_vidc_inst *inst = instance;
+	int rc = 0;
+
+	if (!inst || !ctrl)
+		return -EINVAL;
+
+	switch (ctrl->id) {
+	case V4L2_CID_MPEG_VIDC_VIDEO_HYBRID_HIERP_MODE:
+		ctrl->maximum = inst->capability.hier_p_hybrid.max;
+		ctrl->minimum = inst->capability.hier_p_hybrid.min;
+		break;
+	case V4L2_CID_MPEG_VIDC_VIDEO_HIER_B_NUM_LAYERS:
+		ctrl->maximum = inst->capability.hier_b.max;
+		ctrl->minimum = inst->capability.hier_b.min;
+		break;
+	case V4L2_CID_MPEG_VIDC_VIDEO_HIER_P_NUM_LAYERS:
+		ctrl->maximum = inst->capability.hier_p.max;
+		ctrl->minimum = inst->capability.hier_p.min;
+		break;
+	default:
+		rc = -EINVAL;
+	}
+	return rc;
+}
+EXPORT_SYMBOL(msm_vidc_query_ctrl);
+
 int msm_vidc_s_fmt(void *instance, struct v4l2_format *f)
 {
 	struct msm_vidc_inst *inst = instance;
@@ -1093,6 +1121,8 @@ int msm_vidc_enum_framesizes(void *instance, struct v4l2_frmsizeenum *fsize)
 {
 	struct msm_vidc_inst *inst = instance;
 	struct msm_vidc_capability *capability = NULL;
+	enum hal_video_codec codec;
+	int i;
 
 	if (!inst || !fsize) {
 		dprintk(VIDC_ERR, "%s: invalid parameter: %pK %pK\n",
@@ -1101,15 +1131,33 @@ int msm_vidc_enum_framesizes(void *instance, struct v4l2_frmsizeenum *fsize)
 	}
 	if (!inst->core)
 		return -EINVAL;
+	if (fsize->index != 0)
+		return -EINVAL;
 
-	capability = &inst->capability;
-	fsize->type = V4L2_FRMSIZE_TYPE_STEPWISE;
-	fsize->stepwise.min_width = capability->width.min;
-	fsize->stepwise.max_width = capability->width.max;
-	fsize->stepwise.step_width = capability->width.step_size;
-	fsize->stepwise.min_height = capability->height.min;
-	fsize->stepwise.max_height = capability->height.max;
-	fsize->stepwise.step_height = capability->height.step_size;
+	codec = get_hal_codec(fsize->pixel_format);
+	if (codec == HAL_UNUSED_CODEC)
+		return -EINVAL;
+
+	for (i = 0; i < VIDC_MAX_SESSIONS; i++) {
+		if (inst->core->capabilities[i].codec == codec) {
+			capability = &inst->core->capabilities[i];
+			break;
+		}
+	}
+
+	if (capability) {
+		fsize->type = V4L2_FRMSIZE_TYPE_STEPWISE;
+		fsize->stepwise.min_width = capability->width.min;
+		fsize->stepwise.max_width = capability->width.max;
+		fsize->stepwise.step_width = capability->width.step_size;
+		fsize->stepwise.min_height = capability->height.min;
+		fsize->stepwise.max_height = capability->height.max;
+		fsize->stepwise.step_height = capability->height.step_size;
+	} else {
+		dprintk(VIDC_ERR, "%s: Invalid Pixel Fmt %#x\n",
+				__func__, fsize->pixel_format);
+		return -EINVAL;
+	}
 	return 0;
 }
 EXPORT_SYMBOL(msm_vidc_enum_framesizes);
@@ -1379,10 +1427,6 @@ void *msm_vidc_open(int core_id, int session_type)
 		mutex_unlock(&core->lock);
 	}
 
-	mutex_lock(&core->lock);
-	list_add_tail(&inst->list, &core->instances);
-	mutex_unlock(&core->lock);
-
 	rc = msm_comm_try_state(inst, MSM_VIDC_CORE_INIT_DONE);
 	if (rc) {
 		dprintk(VIDC_ERR,
@@ -1395,6 +1439,11 @@ void *msm_vidc_open(int core_id, int session_type)
 			"Instance count reached Max limit, rejecting session");
 		goto fail_init;
 	}
+
+	mutex_lock(&core->lock);
+	list_add_tail(&inst->list, &core->instances);
+	mutex_unlock(&core->lock);
+
 #ifdef CONFIG_DEBUG_FS
 	inst->debugfs_root =
 		msm_vidc_debugfs_init_inst(inst, core->debugfs_root);
@@ -1402,9 +1451,6 @@ void *msm_vidc_open(int core_id, int session_type)
 	return inst;
 
 fail_init:
-	mutex_lock(&core->lock);
-	list_del(&inst->list);
-	mutex_unlock(&core->lock);
 fail_toggle_cma:
 	mutex_lock(&core->lock);
 	v4l2_fh_del(&inst->event_handler);
@@ -1468,7 +1514,6 @@ static void cleanup_instance(struct msm_vidc_inst *inst)
 int msm_vidc_destroy(struct msm_vidc_inst *inst)
 {
 	struct msm_vidc_core *core;
-	int i = 0;
 
 	if (!inst || !inst->core)
 		return -EINVAL;
@@ -1484,9 +1529,6 @@ int msm_vidc_destroy(struct msm_vidc_inst *inst)
 
 	v4l2_fh_del(&inst->event_handler);
 	v4l2_fh_exit(&inst->event_handler);
-
-	for (i = 0; i < MAX_PORT_NUM; i++)
-		vb2_queue_release(&inst->bufq[i].vb2_bufq);
 
 	DEINIT_MSM_VIDC_LIST(&inst->eosbufs);
 
@@ -1511,7 +1553,7 @@ int msm_vidc_close(void *instance)
 {
 	struct msm_vidc_inst *inst = instance;
 	struct buffer_info *bi, *dummy;
-	int rc = 0;
+	int rc = 0, i = 0;
 
 	if (!inst || !inst->core)
 		return -EINVAL;
@@ -1546,6 +1588,12 @@ int msm_vidc_close(void *instance)
 			"Failed to move video instance to uninit state\n");
 
 	msm_comm_session_clean(inst);
+
+	for (i = 0; i < MAX_PORT_NUM; i++) {
+		mutex_lock(&inst->bufq[i].lock);
+		vb2_queue_release(&inst->bufq[i].vb2_bufq);
+		mutex_unlock(&inst->bufq[i].lock);
+	}
 
 	kref_put(&inst->kref, close_helper);
 	return 0;

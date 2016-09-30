@@ -22,6 +22,7 @@
 #include "venus_boot.h"
 #include <soc/qcom/scm.h>
 #include "soc/qcom/secure_buffer.h"
+#include "soc/qcom/cx_ipeak.h"
 #include <asm/cacheflush.h>
 #include <linux/io.h>
 
@@ -30,6 +31,7 @@
 
 enum clock_properties {
 	CLOCK_PROP_HAS_SCALING = 1 << 0,
+	CLOCK_PROP_HAS_MEM_RETENTION    = 1 << 1,
 };
 
 static inline struct device *msm_iommu_get_ctx(const char *ctx_name)
@@ -188,6 +190,8 @@ void msm_vidc_free_platform_resources(
 	msm_vidc_free_qdss_addr_table(res);
 	msm_vidc_free_bus_vectors(res);
 	msm_vidc_free_buffer_usage_table(res);
+	cx_ipeak_unregister(res->cx_ipeak_context);
+	res->cx_ipeak_context = NULL;
 }
 
 static int msm_vidc_load_reg_table(struct msm_vidc_platform_resources *res)
@@ -1058,6 +1062,11 @@ static int msm_vidc_load_clock_table(
 			vc->has_scaling = false;
 		}
 
+		if (clock_props[c] & CLOCK_PROP_HAS_MEM_RETENTION)
+			vc->has_mem_retention = true;
+		else
+			vc->has_mem_retention = false;
+
 		dprintk(VIDC_DBG, "Found clock %s: scale-able = %s\n", vc->name,
 			vc->count ? "yes" : "no");
 	}
@@ -1242,8 +1251,35 @@ int read_platform_resources_from_dt(
 			"qcom,max-secure-instances",
 			&res->max_secure_inst_count);
 
+	res->cx_ipeak_context = cx_ipeak_register(pdev->dev.of_node,
+			"qcom,cx-ipeak-data");
+
+	if (IS_ERR(res->cx_ipeak_context)) {
+		rc = PTR_ERR(res->cx_ipeak_context);
+		if (rc == -EPROBE_DEFER)
+			dprintk(VIDC_INFO,
+				"cx-ipeak register failed. Deferring probe!");
+		else
+			dprintk(VIDC_ERR,
+				"cx-ipeak register failed. rc: %d", rc);
+
+		res->cx_ipeak_context = NULL;
+		goto err_register_cx_ipeak;
+	} else if (res->cx_ipeak_context) {
+		dprintk(VIDC_INFO, "cx-ipeak register successful");
+	} else {
+		dprintk(VIDC_INFO, "cx-ipeak register not implemented");
+	}
+
+	of_property_read_u32(pdev->dev.of_node,
+			"qcom,clock-freq-threshold",
+			&res->clk_freq_threshold);
+	dprintk(VIDC_DBG, "cx ipeak threshold frequency = %u\n",
+				res->clk_freq_threshold);
+
 	return rc;
 
+err_register_cx_ipeak:
 err_setup_legacy_cb:
 err_load_max_hw_load:
 	msm_vidc_free_allowed_clocks_table(res);
