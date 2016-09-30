@@ -309,6 +309,7 @@ struct msm_vidc_inst {
 	atomic_t in_flush;
 	u32 pic_struct;
 	u32 colour_space;
+	bool allow_ubwc_linear_event;
 };
 
 extern struct msm_vidc_drv *vidc_driver;
