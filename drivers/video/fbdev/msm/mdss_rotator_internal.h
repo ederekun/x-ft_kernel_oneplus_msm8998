@@ -20,6 +20,8 @@
 #include <linux/mutex.h>
 #include <linux/types.h>
 #include <linux/cdev.h>
+#include <linux/kthread.h>
+#include <uapi/linux/sched/types.h>
 
 #include  "mdss_mdp.h"
 
@@ -68,9 +70,9 @@ struct mdss_rot_hw_resource {
 };
 
 struct mdss_rot_queue {
-	struct workqueue_struct *rot_work_queue;
+	struct kthread_worker worker;
+	struct task_struct *thread;
 	struct mdss_rot_timeline timeline;
-
 	struct mutex hw_lock;
 	struct mdss_rot_hw_resource *hw;
 };
@@ -85,7 +87,7 @@ struct mdss_rot_entry_container {
 
 struct mdss_rot_entry {
 	struct mdp_rotation_item item;
-	struct work_struct commit_work;
+	struct kthread_work commit_work;
 
 	struct mdss_rot_queue *queue;
 	struct mdss_rot_entry_container *request;
