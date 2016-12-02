@@ -95,6 +95,10 @@
 #define LINESTATE_DM			BIT(1)
 
 
+#define QUSB2PHY_1P2_VOL_MIN           1200000 /* uV */
+#define QUSB2PHY_1P2_VOL_MAX           1200000 /* uV */
+#define QUSB2PHY_1P2_HPM_LOAD          23000
+
 #define QUSB2PHY_1P8_VOL_MIN           1800000 /* uV */
 #define QUSB2PHY_1P8_VOL_MAX           1800000 /* uV */
 #define QUSB2PHY_1P8_HPM_LOAD          30000   /* uA */
@@ -152,6 +156,7 @@ struct qusb_phy {
 	struct regulator	*vdd;
 	struct regulator	*vdda33;
 	struct regulator	*vdda18;
+	struct regulator	*vdda12;
 	int			vdd_levels[3]; /* none, low, high */
 	int			init_seq_len;
 	int			*qusb_phy_init_seq;
@@ -280,10 +285,30 @@ static int qusb_phy_enable_power(struct qusb_phy *qphy, bool on)
 		goto unconfig_vdd;
 	}
 
+	ret = regulator_set_load(qphy->vdda12, QUSB2PHY_1P2_HPM_LOAD);
+	if (ret < 0) {
+		dev_err(qphy->phy.dev, "Unable to set HPM of vdda12:%d\n", ret);
+		goto disable_vdd;
+	}
+
+	ret = regulator_set_voltage(qphy->vdda12, QUSB2PHY_1P2_VOL_MIN,
+						QUSB2PHY_1P2_VOL_MAX);
+	if (ret) {
+		dev_err(qphy->phy.dev,
+				"Unable to set voltage for vdda12:%d\n", ret);
+		goto put_vdda12_lpm;
+	}
+
+	ret = regulator_enable(qphy->vdda12);
+	if (ret) {
+		dev_err(qphy->phy.dev, "Unable to enable vdda12:%d\n", ret);
+		goto unset_vdda12;
+	}
+
 	ret = regulator_set_load(qphy->vdda18, QUSB2PHY_1P8_HPM_LOAD);
 	if (ret < 0) {
 		dev_err(qphy->phy.dev, "Unable to set HPM of vdda18:%d\n", ret);
-		goto disable_vdd;
+		goto disable_vdda12;
 	}
 
 	ret = regulator_set_voltage(qphy->vdda18, QUSB2PHY_1P8_VOL_MIN,
@@ -356,6 +381,20 @@ put_vdda18_lpm:
 	ret = regulator_set_load(qphy->vdda18, 0);
 	if (ret < 0)
 		dev_err(qphy->phy.dev, "Unable to set LPM of vdda18\n");
+
+disable_vdda12:
+	ret = regulator_disable(qphy->vdda12);
+	if (ret)
+		dev_err(qphy->phy.dev, "Unable to disable vdda12:%d\n", ret);
+unset_vdda12:
+	ret = regulator_set_voltage(qphy->vdda12, 0, QUSB2PHY_1P2_VOL_MAX);
+	if (ret)
+		dev_err(qphy->phy.dev,
+			"Unable to set (0) voltage for vdda12:%d\n", ret);
+put_vdda12_lpm:
+	ret = regulator_set_load(qphy->vdda12, 0);
+	if (ret < 0)
+		dev_err(qphy->phy.dev, "Unable to set LPM of vdda12\n");
 
 disable_vdd:
 	ret = regulator_disable(qphy->vdd);
@@ -1210,6 +1249,12 @@ static int qusb_phy_probe(struct platform_device *pdev)
 	if (IS_ERR(qphy->vdda18)) {
 		dev_err(dev, "unable to get vdda18 supply\n");
 		return PTR_ERR(qphy->vdda18);
+	}
+
+	qphy->vdda12 = devm_regulator_get(dev, "vdda12");
+	if (IS_ERR(qphy->vdda12)) {
+		dev_err(dev, "unable to get vdda12 supply\n");
+		return PTR_ERR(qphy->vdda12);
 	}
 
 	mutex_init(&qphy->phy_lock);
