@@ -30,47 +30,40 @@
 
 #define DRV_NAME "tri-state-key"
 
-/*
- * Original tri-state modes designed by OnePlus
- */
+#define KEYCODE_BASE 600
+#define TOTAL_KEYCODES 6
 
+/*
+ * Switch dev values by OP
+ */
 typedef enum {
 	MODE_UNKNOWN,
 	MODE_MUTE,
 	MODE_DO_NOT_DISTURB,
 	MODE_NORMAL,
+	MODE_MAX_NUM
 } tri_mode_t;
 
 /*
- * Target key codes sending to OPPO's Keyhandler
- * see KeyHandler.java in device/oppo/common/keyhandler
- */
-
-#define KEY_MODE_TOTAL_SILENCE  600
-#define KEY_MODE_ALARMS_ONLY    601
-#define KEY_MODE_PRIORITY_ONLY  602
-#define KEY_MODE_NONE           603
-
-static int current_mode = MODE_UNKNOWN;
-
-/*
  * Default mapping between OP's sti-state switch and OPPO's key codes
- * see Constants.java in device/oppo/common/configpanel
+ * see Constants.java in device/oppo/common
  */
-
-static int keyCode_slider_top = KEY_MODE_ALARMS_ONLY;
-static int keyCode_slider_middle = KEY_MODE_PRIORITY_ONLY;
-static int keyCode_slider_bottom = KEY_MODE_NONE;
+static int current_mode = MODE_UNKNOWN;
+static int current_keyCode = KEYCODE_BASE;
+static int keyCode_slider_top = KEYCODE_BASE + 1;
+static int keyCode_slider_middle = KEYCODE_BASE + 2;
+static int keyCode_slider_bottom = KEYCODE_BASE + 3;
 
 struct switch_dev_data {
 	int irq_key1;
 	int irq_key2;
 	int irq_key3;
 
-	int key1_gpio; // Mute
-	int key2_gpio; // Do Not Disturb
-	int key3_gpio; // Normal
+	int key1_gpio;
+	int key2_gpio;
+	int key3_gpio;
 
+	struct workqueue_struct *wq;
 	struct work_struct work;
 
 	struct device *dev;
@@ -85,58 +78,70 @@ struct switch_dev_data {
 
 static struct switch_dev_data *switch_data;
 
-static DEFINE_MUTEX(sem);
-
-static void send_input(int keyCode)
-{
-	input_report_key(switch_data->input, keyCode, 1);
-	input_sync(switch_data->input);
-	input_report_key(switch_data->input, keyCode, 0);
-	input_sync(switch_data->input);
-}
+static DEFINE_RAW_SPINLOCK(switch_lock);
 
 static void switch_dev_work(struct work_struct *work)
 {
-	int key1, key2, key3;
-	int mode = MODE_UNKNOWN;
-	int keyCode;
+	int keyCode = current_keyCode, mode = current_mode; 
+	int total = 0, i;
+	bool switch_state[MODE_MAX_NUM];
 
-	mutex_lock(&sem);
+	switch_state[MODE_MUTE] = !gpio_get_value(switch_data->key1_gpio);
+	switch_state[MODE_DO_NOT_DISTURB] = !gpio_get_value(switch_data->key2_gpio);
+	switch_state[MODE_NORMAL] = !gpio_get_value(switch_data->key3_gpio);
 
-	key1 = gpio_get_value(switch_data->key1_gpio);
-	key2 = gpio_get_value(switch_data->key2_gpio);
-	key3 = gpio_get_value(switch_data->key3_gpio);
+	for (i = MODE_MUTE; i < MODE_MAX_NUM; i++) {
+		if (!switch_state[i])
+			continue;
 
-	if (key1 == 0) {
-		mode = MODE_MUTE;
-		keyCode = keyCode_slider_top;
-	} else if (key2 == 0) {
-		mode = MODE_DO_NOT_DISTURB;
-		keyCode = keyCode_slider_middle;
-	} else if (key3 == 0) {
-		mode = MODE_NORMAL;
-		keyCode = keyCode_slider_bottom;
+		/* Try again if tri-state is transitioning */
+		if (++total > 1) {
+			if (!work_pending(&switch_data->work))
+				queue_work(switch_data->wq, &switch_data->work);
+			return;
+		}
+
+		mode = i;
 	}
 
-	if (current_mode != mode && mode != MODE_UNKNOWN) {
+	if (mode != current_mode) {
 		current_mode = mode;
-		switch_set_state(&switch_data->sdev, current_mode);
-		send_input(keyCode);
-		printk(DRV_NAME " changed to mode: %d\n", switch_data->sdev.state);
+		switch_set_state(&switch_data->sdev, mode);
+		printk("%s ,tristate set to state(%d) \n", __func__, switch_data->sdev.state);
 	}
 
-	mutex_unlock(&sem);
+	raw_spin_lock(&switch_lock);
+	switch (mode) {
+		case MODE_MUTE:
+			keyCode = keyCode_slider_top;
+			break;
+		case MODE_DO_NOT_DISTURB:
+			keyCode = keyCode_slider_middle;
+			break;
+		case MODE_NORMAL:
+			keyCode = keyCode_slider_bottom;
+			break;
+	}
+	raw_spin_unlock(&switch_lock);
+
+	if (keyCode != current_keyCode) {
+		current_keyCode = keyCode;
+		input_report_key(switch_data->input, keyCode, 1);
+		input_sync(switch_data->input);
+		input_report_key(switch_data->input, keyCode, 0);
+		input_sync(switch_data->input);
+	}
 }
 
 irqreturn_t switch_dev_interrupt(int irq, void *_dev)
 {
-	schedule_work(&switch_data->work);
+	queue_work(switch_data->wq, &switch_data->work);
 	return IRQ_HANDLED;
 }
 
 static void timer_handle(unsigned long arg)
 {
-	schedule_work(&switch_data->work);
+	queue_work(switch_data->wq, &switch_data->work);
 }
 
 #ifdef CONFIG_OF
@@ -162,6 +167,12 @@ static int switch_dev_get_devtree_pdata(struct device *dev)
 
 	return 0;
 }
+
+static struct of_device_id tristate_dev_of_match[] = {
+	{ .compatible = "oneplus,tri-state-key", },
+	{ },
+};
+MODULE_DEVICE_TABLE(of, tristate_dev_of_match);
 #else
 static inline int
 switch_dev_get_devtree_pdata(struct device *dev)
@@ -170,83 +181,147 @@ switch_dev_get_devtree_pdata(struct device *dev)
 }
 #endif
 
-#define KEYCODE_FOPS(WHICH)\
-	static int keyCode_##WHICH##_show(struct seq_file *seq, void *offset)\
-	{\
-		seq_printf(seq, "%d\n", keyCode_slider_##WHICH);\
-		return 0;\
-	}\
-	static ssize_t keyCode_##WHICH##_write(struct file *file,\
-			const char __user *page, size_t t, loff_t *lo)\
-	{\
-		int data;\
-		char buf[10];\
-		if (copy_from_user(buf, page, t)) {\
-			dev_err(switch_data->dev, "read proc input error.\n");\
-			return t;\
-		}\
-		if (sscanf(buf, "%d", &data) != 1)\
-			return t;\
-		if (data < 600 || data > 603)\
-			return t;\
-		keyCode_slider_##WHICH = data;\
-		if (current_mode == 1) {\
-			send_input(keyCode_slider_top);\
-		} else if (current_mode == 2) {\
-			send_input(keyCode_slider_middle);\
-		} else if (current_mode == 3) {\
-			send_input(keyCode_slider_bottom);\
-        }\
-		return t;\
-	}\
-	static int keyCode_##WHICH##_open(struct inode *inode, struct file *file)\
-	{\
-		return single_open(file, keyCode_##WHICH##_show, inode->i_private);\
-	}\
-	const struct file_operations proc_keyCode_##WHICH = {\
-		.owner		= THIS_MODULE,\
-		.open		= keyCode_##WHICH##_open,\
-		.read		= seq_read,\
-		.write		= keyCode_##WHICH##_write,\
-		.llseek 	= seq_lseek,\
-		.release	= single_release,\
-	};
+// Keycode top
+static int keyCode_top_show(struct seq_file *seq, void *offset)
+{
+	seq_printf(seq, "%d\n", keyCode_slider_top);
+	return 0;
+}
 
-KEYCODE_FOPS(top);
-KEYCODE_FOPS(middle);
-KEYCODE_FOPS(bottom);
+static ssize_t keyCode_top_write(struct file *file, const char __user *page, size_t t, loff_t *lo)
+{
+	int data;
+	char buf[10];
 
-#define REGISTER_IRQ_FOR(KEY)\
-	switch_data->irq_##KEY = gpio_to_irq(switch_data->KEY##_gpio);\
-	if (switch_data->irq_##KEY <= 0) {\
-		dev_err(dev, "%s: irq number is not specified, irq #= %d, int pin=%d\n",\
-			__func__, switch_data->irq_##KEY, switch_data->KEY##_gpio);\
-		goto err_detect_irq_num_failed;\
-	} else {\
-		error = gpio_request(switch_data->KEY##_gpio, "tristate_" #KEY "-int");\
-		if (error < 0) {\
-			dev_err(dev, "%s: gpio_request, err=%d\n", __func__, error);\
-			goto err_request_gpio;\
-		}\
-		error = gpio_direction_input(switch_data->KEY##_gpio);\
-		if (error < 0) {\
-			dev_err(dev, "%s: gpio_direction_input, err=%d\n", __func__, error);\
-			goto err_set_gpio_input;\
-		}\
-		error = request_irq(switch_data->irq_##KEY, switch_dev_interrupt,\
-			IRQF_TRIGGER_FALLING|IRQF_TRIGGER_RISING, "tristate_" #KEY, switch_data);\
-		if (error) {\
-			dev_err(dev, "%s: request_irq, err=%d\n", __func__, error);\
-			switch_data->irq_##KEY = -EINVAL;\
-			goto err_request_irq;\
-		}\
+	if (copy_from_user(buf, page, t)) {
+		dev_err(switch_data->dev, "read proc input error.\n");
+		return t;
 	}
+
+	if (sscanf(buf, "%d", &data) != 1)
+		return t;
+	if (data < KEYCODE_BASE || data >= (KEYCODE_BASE + TOTAL_KEYCODES))
+		return t;
+
+	raw_spin_lock(&switch_lock);
+	keyCode_slider_top = data;
+	raw_spin_unlock(&switch_lock);
+
+	queue_work(switch_data->wq, &switch_data->work);
+	return t;
+}
+
+static int keyCode_top_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, keyCode_top_show, inode->i_private);
+}
+
+const struct file_operations proc_keyCode_top =
+{
+	.owner		= THIS_MODULE,
+	.open		= keyCode_top_open,
+	.read		= seq_read,
+	.write		= keyCode_top_write,
+	.llseek 	= seq_lseek,
+	.release	= single_release,
+};
+
+// Keycode middle
+static int keyCode_middle_show(struct seq_file *seq, void *offset)
+{
+	seq_printf(seq, "%d\n", keyCode_slider_middle);
+	return 0;
+}
+
+static ssize_t keyCode_middle_write(struct file *file, const char __user *page, size_t t, loff_t *lo)
+{
+	int data;
+	char buf[10];
+
+	if (copy_from_user(buf, page, t)) {
+		dev_err(switch_data->dev, "read proc input error.\n");
+		return t;
+	}
+
+	if (sscanf(buf, "%d", &data) != 1)
+		return t;
+	if (data < KEYCODE_BASE || data >= (KEYCODE_BASE + TOTAL_KEYCODES))
+		return t;
+
+	raw_spin_lock(&switch_lock);
+	keyCode_slider_middle = data;
+	raw_spin_unlock(&switch_lock);
+
+	queue_work(switch_data->wq, &switch_data->work);
+	return t;
+}
+
+static int keyCode_middle_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, keyCode_middle_show, inode->i_private);
+}
+
+const struct file_operations proc_keyCode_middle =
+{
+	.owner		= THIS_MODULE,
+	.open		= keyCode_middle_open,
+	.read		= seq_read,
+	.write		= keyCode_middle_write,
+	.llseek 	= seq_lseek,
+	.release	= single_release,
+};
+
+// Keycode bottom
+static int keyCode_bottom_show(struct seq_file *seq, void *offset)
+{
+	seq_printf(seq, "%d\n", keyCode_slider_bottom);
+	return 0;
+}
+
+static ssize_t keyCode_bottom_write(struct file *file, const char __user *page, size_t t, loff_t *lo)
+{
+	int data;
+	char buf[10];
+
+	if (copy_from_user(buf, page, t)) {
+		dev_err(switch_data->dev, "read proc input error.\n");
+		return t;
+	}
+
+	if (sscanf(buf, "%d", &data) != 1)
+		return t;
+	if (data < KEYCODE_BASE || data >= (KEYCODE_BASE + TOTAL_KEYCODES))
+		return t;
+
+	raw_spin_lock(&switch_lock);
+	keyCode_slider_bottom = data;
+	raw_spin_unlock(&switch_lock);
+
+	queue_work(switch_data->wq, &switch_data->work);
+	return t;
+}
+
+static int keyCode_bottom_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, keyCode_bottom_show, inode->i_private);
+}
+
+const struct file_operations proc_keyCode_bottom =
+{
+	.owner		= THIS_MODULE,
+	.open		= keyCode_bottom_open,
+	.read		= seq_read,
+	.write		= keyCode_bottom_write,
+	.llseek 	= seq_lseek,
+	.release	= single_release,
+};
 
 static int tristate_dev_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct proc_dir_entry *procdir;
 	int error = 0;
+	int i;
 
 	switch_data = kzalloc(sizeof(struct switch_dev_data), GFP_KERNEL);
 	switch_data->dev = dev;
@@ -260,10 +335,8 @@ static int tristate_dev_probe(struct platform_device *pdev)
 
 	set_bit(EV_KEY, switch_data->input->evbit);
 
-	set_bit(KEY_MODE_TOTAL_SILENCE, switch_data->input->keybit);
-	set_bit(KEY_MODE_ALARMS_ONLY, switch_data->input->keybit);
-	set_bit(KEY_MODE_PRIORITY_ONLY, switch_data->input->keybit);
-	set_bit(KEY_MODE_NONE, switch_data->input->keybit);
+	for (i = KEYCODE_BASE; i < KEYCODE_BASE + TOTAL_KEYCODES; i++)
+		set_bit(i, switch_data->input->keybit);
 
 	input_set_drvdata(switch_data->input, switch_data);
 
@@ -299,10 +372,91 @@ static int tristate_dev_probe(struct platform_device *pdev)
 	}
 
 	// irqs and work, timer stuffs
+	// config irq gpio and request irq
 
-	REGISTER_IRQ_FOR(key1);
-	REGISTER_IRQ_FOR(key2);
-	REGISTER_IRQ_FOR(key3);
+	switch_data->irq_key1 = gpio_to_irq(switch_data->key1_gpio);
+	if (switch_data->irq_key1 <= 0) {
+		printk("%s, irq number is not specified, irq #= %d, int pin=%d\n\n",
+			__func__, switch_data->irq_key1, switch_data->key1_gpio);
+		goto err_detect_irq_num_failed;
+	} else {
+		error = gpio_request(switch_data->key1_gpio,"tristate_key1-int");
+		if (error < 0) {
+			printk(KERN_ERR "%s: gpio_request, err=%d", __func__, error);
+			goto err_request_gpio;
+		}
+		error = gpio_direction_input(switch_data->key1_gpio);
+		if (error < 0) {
+			printk(KERN_ERR "%s: gpio_direction_input, err=%d", __func__, error);
+			goto err_set_gpio_input;
+		}
+		error = request_irq(switch_data->irq_key1, switch_dev_interrupt,
+				IRQF_TRIGGER_FALLING, "tristate_key1", switch_data);
+		if (error) {
+			dev_err(dev, "request_irq %i failed.\n",
+				switch_data->irq_key1);
+			switch_data->irq_key1 = -EINVAL;
+			goto err_request_irq;
+		}
+	}
+
+	switch_data->irq_key2 = gpio_to_irq(switch_data->key2_gpio);
+	if (switch_data->irq_key2 <= 0) {
+		printk("%s, irq number is not specified, irq #= %d, int pin=%d\n\n",
+			__func__, switch_data->irq_key2, switch_data->key2_gpio);
+		goto err_detect_irq_num_failed;
+	} else {
+		error = gpio_request(switch_data->key2_gpio,"tristate_key2-int");
+		if (error < 0) {
+			printk(KERN_ERR "%s: gpio_request, err=%d", __func__, error);
+			goto err_request_gpio;
+		}
+		error = gpio_direction_input(switch_data->key2_gpio);
+		if (error < 0) {
+			printk(KERN_ERR "%s: gpio_direction_input, err=%d", __func__, error);
+			goto err_set_gpio_input;
+		}
+		error = request_irq(switch_data->irq_key2, switch_dev_interrupt,
+				IRQF_TRIGGER_FALLING, "tristate_key2", switch_data);
+		if (error) {
+			dev_err(dev, "request_irq %i failed.\n",
+				switch_data->irq_key2);
+			switch_data->irq_key2 = -EINVAL;
+			goto err_request_irq;
+		}
+	}
+
+	switch_data->irq_key3 = gpio_to_irq(switch_data->key3_gpio);
+	if (switch_data->irq_key3 <= 0) {
+		printk("%s, irq number is not specified, irq #= %d, int pin=%d\n\n",
+			__func__, switch_data->irq_key3, switch_data->key3_gpio);
+		goto err_detect_irq_num_failed;
+	} else {
+		error = gpio_request(switch_data->key3_gpio,"tristate_key3-int");
+		if (error < 0) {
+			printk(KERN_ERR "%s: gpio_request, err=%d", __func__, error);
+			goto err_request_gpio;
+		}
+		error = gpio_direction_input(switch_data->key3_gpio);
+		if (error < 0) {
+			printk(KERN_ERR "%s: gpio_direction_input, err=%d", __func__, error);
+			goto err_set_gpio_input;
+		}
+		error = request_irq(switch_data->irq_key3, switch_dev_interrupt,
+				IRQF_TRIGGER_FALLING, "tristate_key3", switch_data);
+		if (error) {
+			dev_err(dev, "request_irq %i failed.\n",
+				switch_data->irq_key3);
+			switch_data->irq_key3 = -EINVAL;
+			goto err_request_irq;
+		}
+	}
+
+	// init single thread unbound workqueue
+
+	switch_data->wq = alloc_ordered_workqueue("tsk_switch_wq", 0);
+	if (!switch_data->wq)
+		goto err_request_gpio;
 
 	INIT_WORK(&switch_data->work, switch_dev_work);
 
@@ -360,6 +514,7 @@ err_input_device_register:
 static int tristate_dev_remove(struct platform_device *pdev)
 {
 	cancel_work_sync(&switch_data->work);
+	destroy_workqueue(switch_data->wq);
 	gpio_free(switch_data->key1_gpio);
 	gpio_free(switch_data->key2_gpio);
 	gpio_free(switch_data->key3_gpio);
@@ -367,14 +522,6 @@ static int tristate_dev_remove(struct platform_device *pdev)
 	kfree(switch_data);
 	return 0;
 }
-
-#ifdef CONFIG_OF
-static struct of_device_id tristate_dev_of_match[] = {
-	{ .compatible = "oneplus,tri-state-key", },
-	{ },
-};
-MODULE_DEVICE_TABLE(of, tristate_dev_of_match);
-#endif
 
 static struct platform_driver tristate_dev_driver = {
 	.probe	= tristate_dev_probe,
