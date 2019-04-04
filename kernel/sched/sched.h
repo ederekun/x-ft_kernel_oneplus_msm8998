@@ -2288,27 +2288,13 @@ cpu_util_freq_walt(int cpu, struct sched_walt_cpu_load *walt_load)
 	return (util >= capacity) ? capacity : util;
 }
 
-static inline unsigned long
-cpu_util_freq(int cpu, struct sched_walt_cpu_load *walt_load)
-{
-	return cpu_util_freq_walt(cpu, walt_load);
-}
-
 #else
-
-static inline unsigned long
-cpu_util_freq(int cpu, struct sched_walt_cpu_load *walt_load)
-{
-	return cpu_util(cpu);
-}
 
 #define sched_ravg_window TICK_NSEC
 #define sysctl_sched_use_walt_cpu_util 0
 
 #endif /* CONFIG_SCHED_WALT */
 
-extern unsigned long
-boosted_cpu_util(int cpu, unsigned long other_util);
 extern unsigned int capacity_margin_freq;
 
 static inline unsigned long
@@ -2713,6 +2699,13 @@ static inline unsigned long cpu_util_dl(struct rq *rq)
 static inline unsigned long cpu_util_rt(struct rq *rq)
 {
 	return READ_ONCE(rq->avg_rt.util_avg);
+}
+
+static inline unsigned long cpu_util_freq(int cpu)
+{
+	struct rq *rq = cpu_rq(cpu);
+
+	return min(cpu_util_cfs(rq) + cpu_util_rt(rq), capacity_orig_of(cpu));
 }
 
 #else /* CONFIG_CPU_FREQ_GOV_SCHEDUTIL */
