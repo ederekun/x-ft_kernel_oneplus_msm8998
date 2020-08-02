@@ -55,6 +55,10 @@
 #include "mdss_mdp.h"
 #include "mdss_sync.h"
 
+#ifdef CONFIG_FB_MSM_MDSS_FLICKER_FREE
+#include "flicker_free.h"
+#endif
+
 #ifdef CONFIG_FB_MSM_TRIPLE_BUFFER
 #define MDSS_FB_NUM 3
 #else
@@ -2037,6 +2041,7 @@ void mdss_fb_set_backlight(struct msm_fb_data_type *mfd, u32 bkl_lvl)
 		} else {
 			if (mfd->bl_level != bkl_lvl)
 				bl_notify_needed = true;
+			pr_debug("backlight sent to panel :%d\n", temp);
 
 			if (mfd->mdp.is_twm_en)
 				twm_en = mfd->mdp.is_twm_en();
@@ -2044,15 +2049,7 @@ void mdss_fb_set_backlight(struct msm_fb_data_type *mfd, u32 bkl_lvl)
 			if (twm_en) {
 				pr_info("TWM Enabled skip backlight update\n");
 			} else {
-			#ifdef CONFIG_FLICKER_FREE
-				ff_mfd_copy = mfd;
-				ff_bkl_lvl_cpy = temp;
-				pr_debug("backlight sent to panel :%d\n", mdss_panel_calc_backlight(temp));
-				pdata->set_backlight(pdata, mdss_panel_calc_backlight(temp));
-			#else
-				pr_debug("backlight sent to panel :%d\n", temp);
 				pdata->set_backlight(pdata, temp);
-			#endif
 				mfd->bl_level = bkl_lvl;
 				mfd->bl_level_scaled = temp;
 			}
@@ -2065,17 +2062,6 @@ void mdss_fb_set_backlight(struct msm_fb_data_type *mfd, u32 bkl_lvl)
 				NOTIFY_TYPE_BL_UPDATE);
 	}
 }
-
-#ifdef CONFIG_FLICKER_FREE
-struct msm_fb_data_type *get_mfd_copy(void)
-{
-	return ff_mfd_copy;
-}
-
-u32 get_bkl_lvl(void){
-	return ff_bkl_lvl_cpy;
-}
-#endif
 
 void mdss_fb_update_backlight(struct msm_fb_data_type *mfd)
 {
@@ -2098,13 +2084,7 @@ void mdss_fb_update_backlight(struct msm_fb_data_type *mfd)
 				mdss_fb_bl_update_notify(mfd,
 					NOTIFY_TYPE_BL_AD_ATTEN_UPDATE);
 			mdss_fb_bl_update_notify(mfd, NOTIFY_TYPE_BL_UPDATE);
-		#ifdef CONFIG_FLICKER_FREE
-			ff_mfd_copy = mfd;
-			ff_bkl_lvl_cpy = temp;
-			pdata->set_backlight(pdata, mdss_panel_calc_backlight(temp));
-		#else
 			pdata->set_backlight(pdata, temp);
-		#endif
 			mfd->bl_level_scaled = mfd->unset_bl_level;
 			mfd->allow_bl_update = true;
 		}
@@ -2133,6 +2113,10 @@ static int mdss_fb_start_disp_thread(struct msm_fb_data_type *mfd)
 		mfd->disp_thread = NULL;
 	}
 
+#ifdef CONFIG_FB_MSM_MDSS_FLICKER_FREE
+	mdss_fb_update_flicker_free_mfd(mfd);
+#endif
+
 	return ret;
 }
 
@@ -2143,6 +2127,9 @@ static void mdss_fb_stop_disp_thread(struct msm_fb_data_type *mfd)
 
 	kthread_stop(mfd->disp_thread);
 	mfd->disp_thread = NULL;
+#ifdef CONFIG_FB_MSM_MDSS_FLICKER_FREE
+	mdss_fb_update_flicker_free_mfd(NULL);
+#endif
 }
 
 static void mdss_panel_validate_debugfs_info(struct msm_fb_data_type *mfd)
