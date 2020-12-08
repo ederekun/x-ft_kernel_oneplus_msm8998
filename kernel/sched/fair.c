@@ -6331,7 +6331,7 @@ static unsigned long group_max_util(struct energy_env *eenv, int cpu_idx)
 		 * FREQUENCY_UTIL's utilization can be max OPP.
 		 */
 		tsk = unlikely(cpu == eenv->cpu[cpu_idx].cpu_id) ? eenv->p : NULL;
-		util = schedutil_cpu_util(cpu, util, cpu_cap,
+		util = effective_cpu_util(cpu, util, cpu_cap,
 					      FREQUENCY_UTIL, tsk);
 
 		max_util = max(max_util, util);
@@ -6373,7 +6373,7 @@ long group_norm_util(struct energy_env *eenv, int cpu_idx)
 		 * is already enough to scale the EM reported power
 		 * consumption at the (eventually clamped) cpu_capacity.
 		 */
-		util += schedutil_cpu_util(cpu, util, capacity,
+		util += effective_cpu_util(cpu, util, capacity,
 					       ENERGY_UTIL, NULL);
 
 		util_sum += __cpu_norm_util(util, capacity);
@@ -7873,7 +7873,7 @@ static inline int find_best_target(struct task_struct *p, int *backup_cpu,
 			 * IOW, placing the task there would make the CPU
 			 * overutilized. Take uclamp into account to see how
 			 * much capacity we can get out of the CPU; this is
-			 * aligned with schedutil_cpu_util().
+			 * aligned with sched_cpu_util().
 			 */
 			if (uclamp_is_used()) {
 				if (uclamp_rq_is_idle(cpu_rq(cpu))) {
