@@ -115,7 +115,7 @@ static inline void update_last_busy_time(int cpu, bool dequeue,
 	if (prev_nr_run >= BUSY_NR_RUN && per_cpu(nr, cpu) < BUSY_NR_RUN)
 		nr_run_trigger = true;
 
-	if (dequeue && (cpu_util(cpu) * BUSY_LOAD_FACTOR) >
+	if (dequeue && (cpu_util_cfs(cpu) * BUSY_LOAD_FACTOR) >
 			capacity_orig_of(cpu))
 		load_trigger = true;
 
