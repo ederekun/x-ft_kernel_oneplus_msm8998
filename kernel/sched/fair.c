@@ -3110,7 +3110,7 @@ static inline void cfs_rq_util_change(struct cfs_rq *cfs_rq, int flags)
 		 * As is, the util number is not freq-invariant (we'd have to
 		 * implement arch_scale_freq_capacity() for that).
 		 *
-		 * See cpu_util().
+		 * See cpu_util_cfs().
 		 */
 		cpufreq_update_util(rq, flags);
 	}
@@ -6223,15 +6223,15 @@ static unsigned long cpu_util_without(int cpu, struct task_struct *p)
 	 */
 	if (likely(!walt_disabled && sysctl_sched_use_walt_cpu_util) &&
 						p->state == TASK_WAKING)
-		return cpu_util(cpu);
+		return cpu_util_cfs(cpu);
 #endif
 
 	/* Task has no contribution or is new */
 	if (cpu != task_cpu(p) || !READ_ONCE(p->se.avg.last_update_time))
-		return cpu_util(cpu);
+		return cpu_util_cfs(cpu);
 
 #ifdef CONFIG_SCHED_WALT
-	util = max_t(long, cpu_util(cpu) - task_util(p), 0);
+	util = max_t(long, cpu_util_cfs(cpu) - task_util(p), 0);
 #else
 
 	cfs_rq = &cpu_rq(cpu)->cfs;
@@ -6428,7 +6428,7 @@ static int group_idle_state(struct energy_env *eenv, int cpu_idx)
 	 * achievable when we move the task.
 	 */
 	for_each_cpu(i, sched_group_span(sg))
-		grp_util += cpu_util(i);
+		grp_util += cpu_util_cfs(i);
 
 	src_in_grp = cpumask_test_cpu(eenv->cpu[EAS_CPU_PRV].cpu_id,
 				      sched_group_span(sg));
@@ -6511,7 +6511,7 @@ static void store_energy_calc_debug_info(struct energy_env *eenv, int cpu_idx, i
 				sched_group_span(eenv->sg));
 
 		for_each_cpu(cpu, &dbg->group_cpumask)
-			dbg->cpu_util[cpu] = cpu_util(cpu);
+			dbg->cpu_util[cpu] = cpu_util_cfs(cpu);
 
 		eenv->cpu[cpu_idx].debug_idx = debug_idx+1;
 	}
@@ -8265,7 +8265,7 @@ out:
 bool __cpu_overutilized(int cpu, int delta)
 {
 	return (capacity_orig_of(cpu) * 1024) <
-		((cpu_util(cpu) + delta) * sched_capacity_margin_up[cpu]);
+		((cpu_util_cfs(cpu) + delta) * sched_capacity_margin_up[cpu]);
 }
 
 bool cpu_overutilized(int cpu)
@@ -8273,7 +8273,7 @@ bool cpu_overutilized(int cpu)
 	unsigned long rq_util_min = uclamp_rq_get(cpu_rq(cpu), UCLAMP_MIN);
 	unsigned long rq_util_max = uclamp_rq_get(cpu_rq(cpu), UCLAMP_MAX);
 
-	return !util_fits_cpu(NULL, cpu_util(cpu), rq_util_min, rq_util_max, cpu);
+	return !util_fits_cpu(NULL, cpu_util_cfs(cpu), rq_util_min, rq_util_max, cpu);
 }
 
 DEFINE_PER_CPU(struct energy_env, eenv_cache);
@@ -10470,7 +10470,7 @@ static inline void update_sg_lb_stats(struct lb_env *env,
 			load = source_load(i, load_idx);
 
 		sgs->group_load += load;
-		sgs->group_util += cpu_util(i);
+		sgs->group_util += cpu_util_cfs(i);
 		sgs->sum_nr_running += rq->cfs.h_nr_running;
 
 		nr_running = rq->nr_running;
