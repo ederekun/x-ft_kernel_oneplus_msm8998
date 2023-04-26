@@ -3504,7 +3504,8 @@ static int tfa98xx_i2c_probe(struct i2c_client *i2c,
 	bob_power = regulator_get(&i2c->dev, "bob_power");
 	if (IS_ERR(bob_power))
 		pr_err("%s request bob power error!\n", __func__);
-
+	else
+		regulator_set_mode(bob_power, REGULATOR_MODE_NORMAL);
 
 #ifdef CONFIG_DEBUG_FS
 	tfa98xx_debug_init(tfa98xx, i2c);
