@@ -41,17 +41,15 @@ struct pn547_i2c_platform_data {
 	int irq_gpio;
 	int ven_gpio;
 	int firm_gpio;
-#ifdef CONFIG_NFC_PN547_CLOCK_REQUEST
+	int pvdd_en_gpio;
 	int clk_req_gpio;
-	int clk_req_irq;
-#endif
 #ifdef CONFIG_OF
 	u32 irq_gpio_flags;
 	u32 ven_gpio_flags;
 	u32 firm_gpio_flags;
 	u32 pvdd_en_gpio_flags;
+	u32 clk_req_gpio_flags;
 #endif
-	int pvdd_en_gpio;
 	int configure_gpio;
 	int configure_mpp;
 	bool dynamic_config;
