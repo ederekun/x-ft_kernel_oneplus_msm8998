@@ -585,6 +585,9 @@ struct mdss_dsi_ctrl_pdata {
 
 	struct dsi_err_container err_cont;
 
+	int disp_vci_en_gpio;
+	int disp_poc_en_gpio;
+
 	bool is_panel_on;
 	bool setting_mode_loaded;
 
@@ -614,6 +617,9 @@ struct dsi_status_data {
 	struct delayed_work check_status;
 	struct msm_fb_data_type *mfd;
 };
+
+int mdss_dsi_disp_poc_en(struct mdss_panel_data *pdata, int enable);
+int mdss_dsi_disp_vci_en(struct mdss_panel_data *pdata, int enable);
 
 void mdss_dsi_read_hw_revision(struct mdss_dsi_ctrl_pdata *ctrl);
 int dsi_panel_device_register(struct platform_device *ctrl_pdev,
