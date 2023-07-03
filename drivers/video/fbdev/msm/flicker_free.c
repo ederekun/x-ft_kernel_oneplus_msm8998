@@ -128,8 +128,12 @@ uint32_t mdss_panel_calc_backlight(uint32_t bl_lvl)
 		if (!flicker_free_push(mfd, bl_lvl))
 			return elvss_off_threshold;
 	} else if (pcc_enabled) {
-		pcc_enabled = false;
-		flicker_free_push(mfd, elvss_off_threshold);
+		/* Ensure the pcc config is disabled, else retain bl_lvl */
+		if (flicker_free_push(mfd, elvss_off_threshold)) {
+			if (bl_lvl < elvss_off_threshold)
+				return elvss_off_threshold;
+		} else
+			pcc_enabled = false;
 	}
 
 	return bl_lvl;
@@ -153,7 +157,12 @@ static ssize_t ff_write_proc(struct file *file, const char __user *buffer,
 
 	if (mdss_backlight_enable != state) {
 		mdss_backlight_enable = state;
-		mdss_fb_update_backlight(mfd);
+
+		/* Reset backlight */
+		mutex_lock(&mfd->bl_lock);
+		mdss_fb_set_backlight(mfd, 0);
+		mdss_fb_set_backlight(mfd, mfd->bl_level_usr);
+		mutex_unlock(&mfd->bl_lock);
 	}
 
 	return count;
