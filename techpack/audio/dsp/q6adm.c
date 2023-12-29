@@ -1315,6 +1315,9 @@ int adm_set_multi_ch_map(char *channel_map, int path)
 		return -EINVAL;
 	}
 
+	if (channel_map[0] == '\x01')
+		return -EINVAL;
+
 	memcpy(multi_ch_maps[idx].channel_mapping, channel_map,
 			PCM_FORMAT_MAX_NUM_CHANNEL_V8);
 	multi_ch_maps[idx].set_channel_map = true;
@@ -1344,6 +1347,9 @@ int adm_get_multi_ch_map(char *channel_map, int path)
 		pr_err("%s: invalid attempt to get path %d\n", __func__, path);
 		return -EINVAL;
 	}
+
+	if (multi_ch_maps[idx].channel_mapping[0] == '\x01')
+		return -EINVAL;
 
 	if (multi_ch_maps[idx].set_channel_map) {
 		memcpy(channel_map, multi_ch_maps[idx].channel_mapping,
