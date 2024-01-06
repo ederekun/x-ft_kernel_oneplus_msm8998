@@ -95,6 +95,7 @@
 #define DWC3_GGPIO		0xc124
 #define DWC3_GUID		0xc128
 #define DWC3_GUCTL		0xc12c
+#define DWC3_GUCTL2		0xc19c
 #define DWC3_GBUSERRADDR0	0xc130
 #define DWC3_GBUSERRADDR1	0xc134
 #define DWC3_GPRTBIMAP0		0xc138
@@ -334,6 +335,7 @@
 #define DWC3_GUCTL2_HP_TIMER(n)			((n) << 21)
 #define DWC3_GUCTL2_HP_TIMER_MASK		DWC3_GUCTL2_HP_TIMER(0x1f)
 #define DWC3_GUCTL2_LC_TIMER			(1 << 19)
+#define DWC3_GUCTL2_ENABLE_EP_CACHE_EVICT	(1 << 12)
 
 /* Global User Control Register 3 */
 #define DWC3_GUCTL3_USB20_RETRY_DISABLE		BIT(16)
