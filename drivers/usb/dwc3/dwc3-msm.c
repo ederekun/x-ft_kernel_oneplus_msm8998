@@ -79,6 +79,7 @@
 #define CGCTL_REG		(QSCRATCH_REG_OFFSET + 0x28)
 #define PWR_EVNT_IRQ_STAT_REG    (QSCRATCH_REG_OFFSET + 0x58)
 #define PWR_EVNT_IRQ_MASK_REG    (QSCRATCH_REG_OFFSET + 0x5C)
+#define QSCRATCH_USB30_STS_REG	(QSCRATCH_REG_OFFSET + 0xF8)
 
 #define PWR_EVNT_POWERDOWN_IN_P3_MASK		BIT(2)
 #define PWR_EVNT_POWERDOWN_OUT_P3_MASK		BIT(3)
@@ -333,6 +334,8 @@ struct dwc3_msm {
 
 	u64			dummy_gsi_db;
 	dma_addr_t		dummy_gsi_db_dma;
+
+	bool core_init_failed;
 };
 
 #define USB_HSPHY_3P3_VOL_MIN		3050000 /* uV */
@@ -2266,8 +2269,20 @@ static int dwc3_msm_prepare_suspend(struct dwc3_msm *mdwc, bool ignore_p3_state)
 		if (reg & PWR_EVNT_LPM_IN_L2_MASK)
 			break;
 	}
-	if (!(reg & PWR_EVNT_LPM_IN_L2_MASK))
-		dev_err(mdwc->dev, "could not transition HS PHY to L2\n");
+	if (!(reg & PWR_EVNT_LPM_IN_L2_MASK)) {
+		struct dwc3 *dwc = platform_get_drvdata(mdwc->dwc3);
+		dbg_event(0xFF, "PWR_EVNT_LPM",
+			dwc3_msm_read_reg(mdwc->base, PWR_EVNT_IRQ_STAT_REG));
+		dbg_event(0xFF, "QUSB_STS",
+			dwc3_msm_read_reg(mdwc->base, QSCRATCH_USB30_STS_REG));
+		/* Mark fatal error for host mode or USB bus suspend case */
+		if (mdwc->in_host_mode || (mdwc->vbus_active
+			&& mdwc->drd_state == DRD_STATE_PERIPHERAL_SUSPEND)) {
+			queue_work(mdwc->dwc3_wq, &mdwc->resume_work);
+			dev_err(mdwc->dev, "could not transition HS PHY to L2\n");
+			return -EBUSY;
+		}
+	}
 
 	/* Clear L2 event bit */
 	dwc3_msm_write_reg(mdwc->base, PWR_EVNT_IRQ_STAT_REG,
@@ -2754,6 +2769,11 @@ static int dwc3_msm_resume(struct dwc3_msm *mdwc)
 	/* Resume HS PHY */
 	usb_phy_set_suspend(mdwc->hs_phy, 0);
 
+	/* Disable HSPHY auto suspend */
+	dwc3_msm_write_reg(mdwc->base, DWC3_GUSB2PHYCFG(0),
+		dwc3_msm_read_reg(mdwc->base, DWC3_GUSB2PHYCFG(0)) &
+				~DWC3_GUSB2PHYCFG_SUSPHY);
+
 	/* Recover from controller power collapse */
 	if (mdwc->lpm_flags & MDWC3_POWER_COLLAPSE) {
 		if (mdwc->iommu_map) {
@@ -2777,11 +2797,6 @@ static int dwc3_msm_resume(struct dwc3_msm *mdwc)
 
 	/* enable power evt irq for IN P3 detection */
 	enable_irq(mdwc->wakeup_irq[PWR_EVNT_IRQ].irq);
-
-	/* Disable HSPHY auto suspend */
-	dwc3_msm_write_reg(mdwc->base, DWC3_GUSB2PHYCFG(0),
-		dwc3_msm_read_reg(mdwc->base, DWC3_GUSB2PHYCFG(0)) &
-				~DWC3_GUSB2PHYCFG_SUSPHY);
 
 	/* Disable wakeup capable for HS_PHY IRQ & SS_PHY_IRQ if enabled */
 	if (mdwc->lpm_flags & MDWC3_ASYNC_IRQ_WAKE_CAPABILITY) {
@@ -3855,6 +3870,8 @@ static int dwc3_msm_probe(struct platform_device *pdev)
 	if (of_property_read_bool(node, "qcom,disable-dev-mode-pm"))
 		pm_runtime_get_noresume(mdwc->dev);
 
+	mutex_init(&mdwc->suspend_resume_mutex);
+
 	ret = of_property_read_u32(node, "qcom,pm-qos-latency",
 				&mdwc->pm_qos_latency);
 	if (ret) {
@@ -3867,8 +3884,6 @@ static int dwc3_msm_probe(struct platform_device *pdev)
 		dev_dbg(mdwc->dev, "%s: Core power collapse on host PM suspend\n",
 								__func__);
 	}
-
-	mutex_init(&mdwc->suspend_resume_mutex);
 
 	if (of_property_read_bool(node, "extcon")) {
 		ret = dwc3_msm_extcon_register(mdwc);

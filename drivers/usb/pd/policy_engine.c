@@ -1624,7 +1624,8 @@ static void usbpd_set_state(struct usbpd *pd, enum usbpd_state next_state)
 			if (!ret) {
 				usbpd_dbg(&pd->dev, "type:%d\n", val.intval);
 				if (val.intval == POWER_SUPPLY_TYPE_USB ||
-					val.intval == POWER_SUPPLY_TYPE_USB_CDP)
+					val.intval == POWER_SUPPLY_TYPE_USB_CDP ||
+					val.intval == POWER_SUPPLY_TYPE_USB_FLOAT)
 					start_usb_peripheral(pd);
 			}
 		}
@@ -2715,7 +2716,10 @@ static void usbpd_sm(struct work_struct *w)
 				ARRAY_SIZE(default_src_caps), SOP_MSG);
 		if (ret) {
 			pd->caps_count++;
-			if (pd->caps_count >= PD_CAPS_COUNT) {
+			if (pd->caps_count == 10 && pd->current_dr == DR_DFP) {
+				/* Likely not PD-capable, start host now */
+				start_usb_host(pd, true);
+			} else if (pd->caps_count >= PD_CAPS_COUNT) {
 				usbpd_dbg(&pd->dev, "Src CapsCounter exceeded, disabling PD\n");
 				usbpd_set_state(pd, PE_SRC_DISABLED);
 
@@ -3537,6 +3541,18 @@ static int psy_changed(struct notifier_block *nb, unsigned long evt, void *ptr)
 
 	if (pd->typec_mode == typec_mode)
 		return 0;
+
+	if ((typec_mode == POWER_SUPPLY_TYPEC_SOURCE_DEFAULT) ||
+		(typec_mode == POWER_SUPPLY_TYPEC_SOURCE_MEDIUM) ||
+		(typec_mode == POWER_SUPPLY_TYPEC_SOURCE_HIGH)) {
+		ret = power_supply_get_property(pd->usb_psy,
+			POWER_SUPPLY_PROP_REAL_TYPE, &val);
+		if (val.intval == POWER_SUPPLY_TYPE_UNKNOWN) {
+			usbpd_err(&pd->dev, "typec_mode:%d, psy_type:%d\n",
+				typec_mode, val.intval);
+			return 0;
+		}
+	}
 
 	pd->typec_mode = typec_mode;
 
