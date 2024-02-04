@@ -1150,11 +1150,25 @@ static int clk_byte2_set_rate_and_parent(struct clk_hw *hw,
 	return clk_byte2_set_rate(hw, rate, parent_rate);
 }
 
+static unsigned long
+clk_byte2_recalc_rate(struct clk_hw *hw, unsigned long parent_rate)
+{
+	unsigned long recalc_rate;
+	int rc;
+
+	recalc_rate = clk_rcg2_recalc_rate(hw, parent_rate);
+	rc = clk_byte2_set_rate(hw, recalc_rate, parent_rate);
+	if (rc)
+		pr_err("%s: failed to reconfigure", __func__);
+
+	return recalc_rate;
+}
+
 const struct clk_ops clk_byte2_ops = {
 	.is_enabled = clk_rcg2_is_enabled,
 	.get_parent = clk_rcg2_get_parent,
 	.set_parent = clk_rcg2_set_parent,
-	.recalc_rate = clk_rcg2_recalc_rate,
+	.recalc_rate = clk_byte2_recalc_rate,
 	.set_rate = clk_byte2_set_rate,
 	.set_rate_and_parent = clk_byte2_set_rate_and_parent,
 	.determine_rate = clk_byte2_determine_rate,
@@ -1245,11 +1259,25 @@ static int clk_pixel_set_rate_and_parent(struct clk_hw *hw, unsigned long rate,
 	return clk_pixel_set_rate(hw, rate, parent_rate);
 }
 
+static unsigned long
+clk_pixel_recalc_rate(struct clk_hw *hw, unsigned long parent_rate)
+{
+	unsigned long recalc_rate;
+	int rc;
+
+	recalc_rate = clk_rcg2_recalc_rate(hw, parent_rate);
+	rc = clk_pixel_set_rate(hw, recalc_rate, parent_rate);
+	if (rc)
+		pr_err("%s: failed to reconfigure", __func__);
+
+	return recalc_rate;
+}
+
 const struct clk_ops clk_pixel_ops = {
 	.is_enabled = clk_rcg2_is_enabled,
 	.get_parent = clk_rcg2_get_parent,
 	.set_parent = clk_rcg2_set_parent,
-	.recalc_rate = clk_rcg2_recalc_rate,
+	.recalc_rate = clk_pixel_recalc_rate,
 	.set_rate = clk_pixel_set_rate,
 	.set_rate_and_parent = clk_pixel_set_rate_and_parent,
 	.determine_rate = clk_pixel_determine_rate,
