@@ -100,10 +100,24 @@ enum {
 	MODE_UPDATE_ALL		= 0xFF,
 };
 
+enum {
+	DSI_PANEL_MODE_OFF = 1,
+	DSI_PANEL_MODE_SRGB,
+	DSI_PANEL_MODE_DCI_P3,
+	DSI_PANEL_MODE_ONEPLUS,
+	DSI_PANEL_MODE_ADAPTION,
+	DSI_PANEL_MODE_MAX
+};
+
 int mdss_livedisplay_update(struct mdss_dsi_ctrl_pdata *ctrl_pdata, int types);
 int mdss_livedisplay_parse_dt(struct device_node *np, struct mdss_panel_info *pinfo);
 int mdss_livedisplay_create_sysfs(struct msm_fb_data_type *mfd);
 int mdss_livedisplay_event(struct msm_fb_data_type *mfd, int types);
+
+int mdss_livedisplay_get_panel_mode(struct mdss_dsi_ctrl_pdata *ctrl_pdata, 
+		int mode);
+void mdss_livedisplay_set_panel_mode(struct mdss_dsi_ctrl_pdata *ctrl_pdata, 
+		int mode, int enable);
 
 static inline bool is_cabc_cmd(unsigned int value)
 {

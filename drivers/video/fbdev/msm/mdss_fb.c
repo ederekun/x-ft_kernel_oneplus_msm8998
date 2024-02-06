@@ -901,46 +901,6 @@ end:
 	return len;
 }
 
-static ssize_t mdss_fb_get_hbm_mode(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-	struct fb_info *fbi = dev_get_drvdata(dev);
-	struct msm_fb_data_type *mfd = fbi->par;
-	int ret = 0;
-	int level = 0;
-
-	level = mdss_fb_send_panel_event(mfd, MDSS_EVENT_PANEL_GET_HBM_MODE,
-			NULL);
-	ret = scnprintf(buf, PAGE_SIZE, "HBM mode = %d\n"
-											"0-->HBM OFF\n"
-											"1-->HBM ON\n", level);
-	return ret;
-}
-
-static ssize_t mdss_fb_set_hbm_mode(struct device *dev,
-	struct device_attribute *attr, const char *buf, size_t count)
-{
-	struct fb_info *fbi = dev_get_drvdata(dev);
-	struct msm_fb_data_type *mfd = fbi->par;
-	int rc = 0;
-	int level = 0;
-
-	rc = kstrtoint(buf, 10, &level);
-	if (rc) {
-		pr_err("kstrtoint failed. rc=%d\n", rc);
-		return rc;
-	}
-	rc = mdss_fb_send_panel_event(mfd, MDSS_EVENT_PANEL_SET_HBM_MODE,
-		(void *)(unsigned long)level);
-	if (rc)
-		pr_err("Fail to set HBM Mode = %d \n", level);
-
-	return count;
-}
-
-static DEVICE_ATTR(hbm, S_IRUGO | S_IWUSR,
-mdss_fb_get_hbm_mode, mdss_fb_set_hbm_mode);
-
 static ssize_t mdss_fb_get_srgb_mode(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
@@ -979,44 +939,6 @@ static ssize_t mdss_fb_set_srgb_mode(struct device *dev,
 static DEVICE_ATTR(srgb, S_IRUGO | S_IWUSR,
 	mdss_fb_get_srgb_mode, mdss_fb_set_srgb_mode);
 
-static ssize_t mdss_fb_get_adobe_rgb_mode(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-	struct fb_info *fbi = dev_get_drvdata(dev);
-	struct msm_fb_data_type *mfd = fbi->par;
-	int ret = 0;
-	int level = 0;
-
-	level = mdss_fb_send_panel_event(mfd,
-		MDSS_EVENT_PANEL_GET_ADOBE_RGB_MODE, NULL);
-	ret = scnprintf(buf, PAGE_SIZE, "mdss_fb: adobe rgb mode = %d\n", level);
-	return ret;
-}
-
-static ssize_t mdss_fb_set_adobe_rgb_mode(struct device *dev,
-	struct device_attribute *attr, const char *buf, size_t count)
-{
-	struct fb_info *fbi = dev_get_drvdata(dev);
-	struct msm_fb_data_type *mfd = fbi->par;
-	int rc = 0;
-	int level = 0;
-
-	rc = kstrtoint(buf, 10, &level);
-	if (rc) {
-		pr_err("kstrtoint failed. rc=%d\n", rc);
-		return rc;
-	}
-	rc = mdss_fb_send_panel_event(mfd, MDSS_EVENT_PANEL_SET_ADOBE_RGB_MODE,
-		(void *)(unsigned long)level);
-	if (rc)
-		pr_err("Failed to set Adobe RGB mode: %d\n", level);
-
-	return count;
-}
-
-static DEVICE_ATTR(adobe_rgb, S_IRUGO | S_IWUSR,
-	mdss_fb_get_adobe_rgb_mode, mdss_fb_set_adobe_rgb_mode);
-
 static ssize_t mdss_fb_get_dci_p3_mode(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
@@ -1054,44 +976,6 @@ static ssize_t mdss_fb_set_dci_p3_mode(struct device *dev,
 
 static DEVICE_ATTR(dci_p3, S_IRUGO | S_IWUSR,
 	mdss_fb_get_dci_p3_mode, mdss_fb_set_dci_p3_mode);
-
-static ssize_t mdss_fb_get_night_mode(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-	struct fb_info *fbi = dev_get_drvdata(dev);
-	struct msm_fb_data_type *mfd = fbi->par;
-	int ret = 0;
-	int level = 0;
-
-	level = mdss_fb_send_panel_event(mfd, MDSS_EVENT_PANEL_GET_NIGHT_MODE,
-			NULL);
-	ret = scnprintf(buf, PAGE_SIZE, "mdss_fb: night mode = %d\n", level);
-	return ret;
-}
-
-static ssize_t mdss_fb_set_night_mode(struct device *dev,
-	struct device_attribute *attr, const char *buf, size_t count)
-{
-	struct fb_info *fbi = dev_get_drvdata(dev);
-	struct msm_fb_data_type *mfd = fbi->par;
-	int rc = 0;
-	int level = 0;
-
-	rc = kstrtoint(buf, 10, &level);
-	if (rc) {
-		pr_err("kstrtoint failed. rc=%d\n", rc);
-		return rc;
-	}
-	rc = mdss_fb_send_panel_event(mfd, MDSS_EVENT_PANEL_SET_NIGHT_MODE,
-		(void *)(unsigned long)level);
-	if (rc)
-		pr_err("Failed to set Night mode: %d\n", level);
-
-	return count;
-}
-
-static DEVICE_ATTR(night_mode, S_IRUGO | S_IWUSR,
-	mdss_fb_get_night_mode, mdss_fb_set_night_mode);
 
 static ssize_t mdss_fb_get_oneplus_mode(struct device *dev,
 		struct device_attribute *attr, char *buf)
@@ -1231,10 +1115,7 @@ static struct attribute *mdss_fb_attrs[] = {
 	&dev_attr_msm_fb_dfps_mode.attr,
 	&dev_attr_measured_fps.attr,
 	&dev_attr_srgb.attr,
-	&dev_attr_hbm.attr,
-	&dev_attr_adobe_rgb.attr,
 	&dev_attr_dci_p3.attr,
-	&dev_attr_night_mode.attr,
 	&dev_attr_adaption_mode.attr,
 	&dev_attr_oneplus_mode.attr,
 	&dev_attr_msm_fb_persist_mode.attr,
