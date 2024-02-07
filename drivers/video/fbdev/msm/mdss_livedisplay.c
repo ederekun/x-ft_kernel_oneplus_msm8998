@@ -344,21 +344,12 @@ void mdss_livedisplay_set_panel_mode(struct mdss_dsi_ctrl_pdata *ctrl_pdata,
 		mode = DSI_PANEL_MODE_OFF;
 	}
 
-	/* Do not send SRGB and DCI_P3 on_cmds over each other,
-	   reset the panel to switch */
-	switch (mode) {
-		case DSI_PANEL_MODE_SRGB:
-			if (mlc->preset != DSI_PANEL_MODE_DCI_P3)
-				break;
-		case DSI_PANEL_MODE_DCI_P3:
-			if (mlc->preset != DSI_PANEL_MODE_SRGB)
-				break;
-			mlc->preset = DSI_PANEL_MODE_OFF;
-			mdss_livedisplay_update(ctrl_pdata, MODE_PRESET);
-			break;
-		default:
-			break;
-	};
+	/* Reset the panel mode before applying a different preset */
+	if (mode != DSI_PANEL_MODE_OFF
+	    && mlc->preset != DSI_PANEL_MODE_OFF) {
+		mlc->preset = DSI_PANEL_MODE_OFF;
+		mdss_livedisplay_update(ctrl_pdata, MODE_PRESET);
+	}
 
 	mlc->preset = mode;
 	mdss_livedisplay_update(ctrl_pdata, MODE_PRESET);
@@ -536,21 +527,12 @@ static ssize_t mdss_livedisplay_set_preset(struct device *dev,
 	if (value == mlc->preset)
 		return count;
 
-	/* Do not send SRGB and DCI_P3 on_cmds over each other,
-	   reset the panel to switch */
-	switch (value) {
-		case DSI_PANEL_MODE_SRGB:
-			if (mlc->preset != DSI_PANEL_MODE_DCI_P3)
-				break;
-		case DSI_PANEL_MODE_DCI_P3:
-			if (mlc->preset != DSI_PANEL_MODE_SRGB)
-				break;
-			mlc->preset = DSI_PANEL_MODE_OFF;
-			mdss_livedisplay_event(mfd, MODE_PRESET);
-			break;
-		default:
-			break;
-	};
+	/* Reset the panel mode before applying a different preset */
+	if (value != DSI_PANEL_MODE_OFF
+	    && mlc->preset != DSI_PANEL_MODE_OFF) {
+		mlc->preset = DSI_PANEL_MODE_OFF;
+		mdss_livedisplay_event(mfd, MODE_PRESET);
+	}
 
 	mlc->preset = value;
 	mdss_livedisplay_event(mfd, MODE_PRESET);
