@@ -776,10 +776,6 @@ int mdss_livedisplay_create_sysfs(struct msm_fb_data_type *mfd)
 		rc = sysfs_create_file(&mfd->fbi->dev->kobj, &dev_attr_num_presets.attr);
 		if (rc)
 			goto sysfs_err;
-
-		/* Set default to SRGB */
-		if (mlc->presets_len[DSI_PANEL_MODE_SRGB] > 0)
-			mlc->preset = DSI_PANEL_MODE_SRGB;
 	}
 
 	mlc->mfd = mfd;
