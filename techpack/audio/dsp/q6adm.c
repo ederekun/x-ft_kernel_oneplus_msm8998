@@ -1315,9 +1315,6 @@ int adm_set_multi_ch_map(char *channel_map, int path)
 		return -EINVAL;
 	}
 
-	if (channel_map[0] == '\x01')
-		return -EINVAL;
-
 	memcpy(multi_ch_maps[idx].channel_mapping, channel_map,
 			PCM_FORMAT_MAX_NUM_CHANNEL_V8);
 	multi_ch_maps[idx].set_channel_map = true;
@@ -1347,9 +1344,6 @@ int adm_get_multi_ch_map(char *channel_map, int path)
 		pr_err("%s: invalid attempt to get path %d\n", __func__, path);
 		return -EINVAL;
 	}
-
-	if (multi_ch_maps[idx].channel_mapping[0] == '\x01')
-		return -EINVAL;
 
 	if (multi_ch_maps[idx].set_channel_map) {
 		memcpy(channel_map, multi_ch_maps[idx].channel_mapping,
@@ -2450,6 +2444,24 @@ fail_cmd:
 }
 EXPORT_SYMBOL(adm_connect_afe_port);
 
+static void adm_set_custom_playback_ch_map(void)
+{
+	char channel_map[PCM_FORMAT_MAX_NUM_CHANNEL_V8];
+
+	memset(channel_map, 0, PCM_FORMAT_MAX_NUM_CHANNEL_V8);
+
+	/* Configure 5.1 multi ch setup */
+	channel_map[0] = PCM_CHANNEL_FL;
+	channel_map[1] = PCM_CHANNEL_FR;
+	channel_map[2] = PCM_CHANNEL_LFE;
+	channel_map[3] = PCM_CHANNEL_FC;
+	channel_map[4] = PCM_CHANNEL_LS;
+	channel_map[5] = PCM_CHANNEL_RS;
+
+	if (!adm_set_multi_ch_map(channel_map, ADM_PATH_PLAYBACK))
+		pr_info("%s: pushed 5.1 channel map to ADM", __func__);
+}
+
 int adm_arrange_mch_map(struct adm_cmd_device_open_v5 *open, int path,
 			 int channel_mode, int port_idx)
 {
@@ -2461,6 +2473,8 @@ int adm_arrange_mch_map(struct adm_cmd_device_open_v5 *open, int path,
 	switch (path) {
 	case ADM_PATH_PLAYBACK:
 		idx = ADM_MCH_MAP_IDX_PLAYBACK;
+		/* Use custom channel mapping */
+		adm_set_custom_playback_ch_map();
 		break;
 	case ADM_PATH_LIVE_REC:
 	case ADM_PATH_NONLIVE_REC:
@@ -2470,9 +2484,10 @@ int adm_arrange_mch_map(struct adm_cmd_device_open_v5 *open, int path,
 		goto non_mch_path;
 	};
 
-	if ((open->dev_num_channel > 2) &&
-		(port_channel_map[port_idx].set_channel_map ||
+	if ((port_channel_map[port_idx].set_channel_map ||
 		 multi_ch_maps[idx].set_channel_map)) {
+		pr_info("%s: use multi_ch_maps = %d", __func__,
+				!port_channel_map[port_idx].set_channel_map);
 		if (port_channel_map[port_idx].set_channel_map)
 			memcpy(open->dev_channel_mapping,
 				port_channel_map[port_idx].channel_mapping,
@@ -2603,6 +2618,8 @@ static int adm_arrange_mch_map_v8(
 	switch (path) {
 	case ADM_PATH_PLAYBACK:
 		idx = ADM_MCH_MAP_IDX_PLAYBACK;
+		/* Use custom channel mapping */
+		adm_set_custom_playback_ch_map();
 		break;
 	case ADM_PATH_LIVE_REC:
 	case ADM_PATH_NONLIVE_REC:
@@ -2612,9 +2629,10 @@ static int adm_arrange_mch_map_v8(
 		goto non_mch_path;
 	};
 
-	if ((ep_payload->dev_num_channel > 2) &&
-		(port_channel_map[port_idx].set_channel_map ||
+	if ((port_channel_map[port_idx].set_channel_map ||
 		 multi_ch_maps[idx].set_channel_map)) {
+		pr_info("%s: use multi_ch_maps = %d", __func__,
+				!port_channel_map[port_idx].set_channel_map);
 		if (port_channel_map[port_idx].set_channel_map)
 			memcpy(ep_payload->dev_channel_mapping,
 				port_channel_map[port_idx].channel_mapping,

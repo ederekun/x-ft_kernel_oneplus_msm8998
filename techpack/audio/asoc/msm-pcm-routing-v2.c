@@ -180,6 +180,7 @@ static int msm_routing_get_bit_width(unsigned int format)
 
 static bool msm_is_resample_needed(int input_sr, int output_sr)
 {
+#if 0
 	bool rc = false;
 
 	if (input_sr != output_sr)
@@ -190,6 +191,9 @@ static bool msm_is_resample_needed(int input_sr, int output_sr)
 		input_sr, output_sr);
 
 	return rc;
+#else /* Always use mfc cfg for forced playback channel mapping */
+	return true;
+#endif
 }
 
 static void msm_pcm_routing_cfg_pp(int port_id, int copp_idx, int topology,
