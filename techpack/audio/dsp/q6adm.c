@@ -2450,16 +2450,18 @@ static void adm_set_custom_playback_ch_map(void)
 
 	memset(channel_map, 0, PCM_FORMAT_MAX_NUM_CHANNEL_V8);
 
-	/* Configure 5.1 multi ch setup */
+	/* Configure 7.1 multi ch setup */
 	channel_map[0] = PCM_CHANNEL_FL;
 	channel_map[1] = PCM_CHANNEL_FR;
 	channel_map[2] = PCM_CHANNEL_LFE;
 	channel_map[3] = PCM_CHANNEL_FC;
 	channel_map[4] = PCM_CHANNEL_LS;
 	channel_map[5] = PCM_CHANNEL_RS;
+	channel_map[6] = PCM_CHANNEL_LB;
+	channel_map[7] = PCM_CHANNEL_RB;
 
 	if (!adm_set_multi_ch_map(channel_map, ADM_PATH_PLAYBACK))
-		pr_info("%s: pushed 5.1 channel map to ADM", __func__);
+		pr_info("%s: pushed 7.1 channel map to ADM", __func__);
 }
 
 int adm_arrange_mch_map(struct adm_cmd_device_open_v5 *open, int path,
