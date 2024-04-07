@@ -129,7 +129,7 @@ exit_free:
 int mdss_livedisplay_update(struct mdss_dsi_ctrl_pdata *ctrl_pdata,
 		int types)
 {
-	int ret = 0;
+	int ret = 0, i;
 	struct mdss_panel_info *pinfo = NULL;
 	struct mdss_livedisplay_ctx *mlc = NULL;
 	unsigned int len = 0, dlen = 0;
@@ -152,8 +152,12 @@ int mdss_livedisplay_update(struct mdss_dsi_ctrl_pdata *ctrl_pdata,
 		return 0;
 
 	// First find the length of the command array
-	if ((mlc->caps & MODE_PRESET) && (types & MODE_PRESET))
-		len += mlc->presets_len[mlc->preset];
+	if ((mlc->caps & MODE_PRESET) && (types & MODE_PRESET)) {
+		for (i = 0; i < mlc->num_presets; i++) {
+			if (mlc->preset & BIT(i))
+				len += mlc->presets_len[i];
+		}
+	}
 
 	if ((mlc->caps & MODE_COLOR_ENHANCE) && (types & MODE_COLOR_ENHANCE))
 		len += mlc->ce_enabled ? mlc->ce_on_cmds_len : mlc->ce_off_cmds_len;
@@ -213,8 +217,12 @@ int mdss_livedisplay_update(struct mdss_dsi_ctrl_pdata *ctrl_pdata,
 
 	// Build the command as a single chain, preset first
 	if ((mlc->caps & MODE_PRESET) && (types & MODE_PRESET)) {
-		memcpy(cmd_buf, mlc->presets[mlc->preset], mlc->presets_len[mlc->preset]);
-		dlen += mlc->presets_len[mlc->preset];
+		for (i = 0; i < mlc->num_presets; i++) {
+			if (mlc->preset & BIT(i)) {
+				memcpy(cmd_buf + dlen, mlc->presets[i], mlc->presets_len[i]);
+				dlen += mlc->presets_len[i];
+			}
+		}
 	}
 
 	// Color enhancement
@@ -318,7 +326,20 @@ int mdss_livedisplay_get_panel_mode(struct mdss_dsi_ctrl_pdata *ctrl_pdata,
 	if (mlc == NULL)
 		return false;
 
-	return mlc->preset == mode;
+	return !!(mlc->preset & BIT(mode));
+}
+
+static void mdss_livedisplay_exclusive_presets(struct mdss_livedisplay_ctx *mlc,
+		int mode)
+{
+	switch (mode) {
+		case DSI_PANEL_MODE_SRGB:
+			mlc->preset &= ~BIT(DSI_PANEL_MODE_DCI_P3);
+			break;
+		case DSI_PANEL_MODE_DCI_P3:
+			mlc->preset &= ~BIT(DSI_PANEL_MODE_SRGB);
+			break;
+	}
 }
 
 void mdss_livedisplay_set_panel_mode(struct mdss_dsi_ctrl_pdata *ctrl_pdata, 
@@ -335,24 +356,26 @@ void mdss_livedisplay_set_panel_mode(struct mdss_dsi_ctrl_pdata *ctrl_pdata,
 	if (mlc == NULL)
 		return;
 
+	mutex_lock(&ctrl_pdata->panel_mode_lock);
+	if (!ctrl_pdata->is_panel_on) {
+		mutex_unlock(&ctrl_pdata->panel_mode_lock);
+		return;
+	}
+
 	if (!!enable) {
-		if (mlc->preset == mode)
-			return;
+		mlc->preset |= BIT(mode);
+		mdss_livedisplay_exclusive_presets(mlc, mode);
 	} else {
-		if (mlc->preset != mode)
-			return;
-		mode = DSI_PANEL_MODE_OFF;
+		mlc->preset &= ~BIT(mode);
+		mlc->preset |= BIT(DSI_PANEL_MODE_OFF);
 	}
 
-	/* Reset the panel mode before applying a different preset */
-	if (mode != DSI_PANEL_MODE_OFF
-	    && mlc->preset != DSI_PANEL_MODE_OFF) {
-		mlc->preset = DSI_PANEL_MODE_OFF;
-		mdss_livedisplay_update(ctrl_pdata, MODE_PRESET);
-	}
-
-	mlc->preset = mode;
 	mdss_livedisplay_update(ctrl_pdata, MODE_PRESET);
+
+	// Always clear panel mode off when using panel modes
+	mlc->preset &= ~BIT(DSI_PANEL_MODE_OFF);
+
+	mutex_unlock(&ctrl_pdata->panel_mode_lock);
 }
 
 static ssize_t mdss_livedisplay_get_cabc(struct device *dev,
@@ -506,8 +529,15 @@ static ssize_t mdss_livedisplay_get_preset(struct device *dev,
 	struct fb_info *fbi = dev_get_drvdata(dev);
 	struct msm_fb_data_type *mfd = (struct msm_fb_data_type *)fbi->par;
 	struct mdss_livedisplay_ctx *mlc = get_ctx(mfd);
+	int i;
 
-	return sprintf(buf, "%d\n", mlc->preset);
+	// Highest preset takes precedence
+	for (i = mlc->num_presets - 1; i >= 0; i--) {
+		if (mlc->preset & BIT(i))
+			break;
+	}
+
+	return sprintf(buf, "%d\n", i);
 }
 
 static ssize_t mdss_livedisplay_set_preset(struct device *dev,
@@ -523,18 +553,8 @@ static ssize_t mdss_livedisplay_set_preset(struct device *dev,
 	if (value < 0 || value >= mlc->num_presets)
 		return -EINVAL;
 
-	/* No need to send the same cmds again */
-	if (value == mlc->preset)
-		return count;
-
-	/* Reset the panel mode before applying a different preset */
-	if (value != DSI_PANEL_MODE_OFF
-	    && mlc->preset != DSI_PANEL_MODE_OFF) {
-		mlc->preset = DSI_PANEL_MODE_OFF;
-		mdss_livedisplay_event(mfd, MODE_PRESET);
-	}
-
-	mlc->preset = value;
+	// Livedisplay preset does not allow stacking
+	mlc->preset = BIT(value);
 	mdss_livedisplay_event(mfd, MODE_PRESET);
 
 	return count;
@@ -612,7 +632,7 @@ static void mdss_livedisplay_parse_dsi_presets(struct device_node *np,
 	if (idx >= DSI_PANEL_MODE_MAX)
 		return;
 
-	for (i = 0; i < DSI_PANEL_MODE_MAX; i++) {
+	for (i = DSI_PANEL_MODE_OFF; i < DSI_PANEL_MODE_MAX; i++) {
 		if (dsi_presets[i].idx != idx)
 			continue;
 
