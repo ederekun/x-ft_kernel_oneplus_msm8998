@@ -9,6 +9,9 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
+ * 
+ * MDSS DSI Panel Modes support and Auto HBM by Edrick Sinsuan
+ * (c) 2024 Edrick Sinsuan <evcsinsuan@gmail.com>
  */
 
 #include <linux/err.h>
@@ -39,7 +42,8 @@
  * aco: Automatic Contrast Optimization. Must be configured in
  *      the panel devicetree. Boolean.
  *
- * hbm: High Brightness Mode. Common for OLED panels. Boolean.
+ * hbm: Auto High Brightness Mode. Common for OLED panels. Boolean.
+ *      Only turns on at 80% and above of max backlight level.
  *
  * preset: Arbitrary DSI commands, up to 10 may be configured.
  *      Useful for gamma calibration.
@@ -47,6 +51,31 @@
  * color_enhance: Hardware color enhancement. Must be configured
  *      in the panel devicetree. Boolean.
  */
+
+static inline bool mdss_livedisplay_get_hbm_flag(struct mdss_livedisplay_ctx *mlc, 
+		unsigned int flag)
+{
+	return (mlc->hbm_flags & flag) == flag;
+}
+
+static inline bool mdss_livedisplay_hbm_should_update(struct mdss_livedisplay_ctx *mlc)
+{
+	bool hbm_active, hbm_allowed;
+
+	hbm_active = mdss_livedisplay_get_hbm_flag(mlc, HBM_ACTIVE);
+	hbm_allowed = mdss_livedisplay_get_hbm_flag(mlc, HBM_ENABLED | HBM_ALLOWED);
+
+	return hbm_active != hbm_allowed;
+}
+
+static inline void mdss_livedisplay_set_hbm_flag(struct mdss_livedisplay_ctx *mlc, 
+		unsigned int flag, bool state)
+{
+	if (state)
+		mlc->hbm_flags |= flag;
+	else
+		mlc->hbm_flags &= ~flag;
+}
 
 extern void mdss_dsi_panel_cmds_send(struct mdss_dsi_ctrl_pdata *ctrl,
 		struct dsi_panel_cmds *pcmds, u32 flags);
@@ -136,6 +165,7 @@ int mdss_livedisplay_update(struct mdss_dsi_ctrl_pdata *ctrl_pdata,
 	struct dsi_panel_cmds dsi_cmds;
 	uint8_t cabc_value = 0;
 	uint8_t *cmd_buf;
+	bool hbm_state;
 
 	if (ctrl_pdata == NULL)
 		return -ENODEV;
@@ -162,8 +192,12 @@ int mdss_livedisplay_update(struct mdss_dsi_ctrl_pdata *ctrl_pdata,
 	if ((mlc->caps & MODE_COLOR_ENHANCE) && (types & MODE_COLOR_ENHANCE))
 		len += mlc->ce_enabled ? mlc->ce_on_cmds_len : mlc->ce_off_cmds_len;
 
-	if ((mlc->caps & MODE_HIGH_BRIGHTNESS) && (types & MODE_HIGH_BRIGHTNESS))
-		len += mlc->hbm_enabled ? mlc->hbm_on_cmds_len : mlc->hbm_off_cmds_len;
+	if ((mlc->caps & MODE_HIGH_BRIGHTNESS) && (types & MODE_HIGH_BRIGHTNESS)) {
+		if (mdss_livedisplay_hbm_should_update(mlc)) {
+			hbm_state = !mdss_livedisplay_get_hbm_flag(mlc, HBM_ACTIVE);
+			len += hbm_state ? mlc->hbm_on_cmds_len : mlc->hbm_off_cmds_len;
+		}
+	}
 
 	if (is_cabc_cmd(types) && is_cabc_cmd(mlc->caps)) {
 
@@ -238,12 +272,15 @@ int mdss_livedisplay_update(struct mdss_dsi_ctrl_pdata *ctrl_pdata,
 
 	// High brightness mode
 	if ((mlc->caps & MODE_HIGH_BRIGHTNESS) && (types & MODE_HIGH_BRIGHTNESS)) {
-		if (mlc->hbm_enabled) {
-			memcpy(cmd_buf + dlen, mlc->hbm_on_cmds, mlc->hbm_on_cmds_len);
-			dlen += mlc->hbm_on_cmds_len;
-		} else {
-			memcpy(cmd_buf + dlen, mlc->hbm_off_cmds, mlc->hbm_off_cmds_len);
-			dlen += mlc->hbm_off_cmds_len;
+		if (mdss_livedisplay_hbm_should_update(mlc)) {
+			mdss_livedisplay_set_hbm_flag(mlc, HBM_ACTIVE, hbm_state);
+			if (hbm_state) {
+				memcpy(cmd_buf + dlen, mlc->hbm_on_cmds, mlc->hbm_on_cmds_len);
+				dlen += mlc->hbm_on_cmds_len;
+			} else {
+				memcpy(cmd_buf + dlen, mlc->hbm_off_cmds, mlc->hbm_off_cmds_len);
+				dlen += mlc->hbm_off_cmds_len;
+			}
 		}
 	}
 
@@ -310,6 +347,25 @@ int mdss_livedisplay_event(struct msm_fb_data_type *mfd, int types)
 	} while (!rc && pdata);
 
 	return rc;
+}
+
+int mdss_livedisplay_set_panel_hbm_allowed(struct mdss_dsi_ctrl_pdata *ctrl_pdata, 
+		int is_allowed)
+{
+	struct mdss_panel_info *pinfo = NULL;
+	struct mdss_livedisplay_ctx *mlc = NULL;
+
+	pinfo = &(ctrl_pdata->panel_data.panel_info);
+	if (pinfo == NULL)
+		return false;
+
+	mlc = pinfo->livedisplay;
+	if (mlc == NULL)
+		return false;
+
+	mdss_livedisplay_set_hbm_flag(mlc, HBM_ALLOWED, !!is_allowed);
+	if (mdss_livedisplay_hbm_should_update(mlc))
+		mdss_livedisplay_update(ctrl_pdata, MODE_HIGH_BRIGHTNESS);
 }
 
 int mdss_livedisplay_get_panel_mode(struct mdss_dsi_ctrl_pdata *ctrl_pdata, 
@@ -443,7 +499,7 @@ static ssize_t mdss_livedisplay_get_hbm(struct device *dev,
 	struct msm_fb_data_type *mfd = (struct msm_fb_data_type *)fbi->par;
 	struct mdss_livedisplay_ctx *mlc = get_ctx(mfd);
 
-	return sprintf(buf, "%d\n", mlc->hbm_enabled);
+	return sprintf(buf, "%d\n", mdss_livedisplay_get_hbm_flag(mlc, HBM_ENABLED));
 }
 
 static ssize_t mdss_livedisplay_set_hbm(struct device *dev,
@@ -454,12 +510,14 @@ static ssize_t mdss_livedisplay_set_hbm(struct device *dev,
 	struct fb_info *fbi = dev_get_drvdata(dev);
 	struct msm_fb_data_type *mfd = (struct msm_fb_data_type *)fbi->par;
 	struct mdss_livedisplay_ctx *mlc = get_ctx(mfd);
+	int hbm_enabled = mdss_livedisplay_get_hbm_flag(mlc, HBM_ENABLED);
 
 	sscanf(buf, "%du", &value);
 	if ((value == 0 || value == 1)
-			&& value != mlc->hbm_enabled) {
-		mlc->hbm_enabled = value;
-		mdss_livedisplay_event(mfd, MODE_HIGH_BRIGHTNESS);
+			&& value != hbm_enabled) {
+		mdss_livedisplay_set_hbm_flag(mlc, HBM_ENABLED, !!value);
+		if (mdss_livedisplay_hbm_should_update(mlc))
+			mdss_livedisplay_event(mfd, MODE_HIGH_BRIGHTNESS);
 	}
 
 	return count;

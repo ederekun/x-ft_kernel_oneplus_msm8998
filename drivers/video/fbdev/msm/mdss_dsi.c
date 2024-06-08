@@ -3103,6 +3103,10 @@ static int mdss_dsi_event_handler(struct mdss_panel_data *pdata,
 				&ctrl_pdata->dba_work, HZ);
 		}
 		break;
+	case MDSS_EVENT_PANEL_SET_HBM_MODE_ALLOWED:
+		mdss_livedisplay_set_panel_hbm_allowed(ctrl_pdata,
+				(int)(unsigned long) arg);
+		break;
 	case MDSS_EVENT_PANEL_SET_SRGB_MODE:
 		mdss_livedisplay_set_panel_mode(ctrl_pdata,
 				DSI_PANEL_MODE_SRGB, (int)(unsigned long) arg);

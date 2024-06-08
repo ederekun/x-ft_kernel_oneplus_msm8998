@@ -924,6 +924,11 @@ static void mdss_dsi_panel_bl_ctrl(struct mdss_panel_data *pdata,
 		bl_level = backlight_level_remap(bl_level);
 	}
 
+	/* Enable HBM if bl_level is >= 80% of bklt_max */
+	if (pdata->event_handler)
+		pdata->event_handler(pdata, MDSS_EVENT_PANEL_SET_HBM_MODE_ALLOWED,
+				(void *)(unsigned long) (bl_level >= ((ctrl_pdata->bklt_max * 4) / 5)));
+
 	/*
 	 * Some backlight controllers specify a minimum duty cycle
 	 * for the backlight brightness. If the brightness is less

@@ -60,9 +60,9 @@ struct mdss_livedisplay_ctx {
 	unsigned int preset;
 	unsigned int cabc_level;
 	unsigned int sre_level;
+	unsigned int hbm_flags;
 	bool aco_enabled;
 	bool ce_enabled;
-	bool hbm_enabled;
 
 	unsigned int link_state;
 
@@ -101,6 +101,12 @@ enum {
 };
 
 enum {
+	HBM_ALLOWED		= 0x01,
+	HBM_ACTIVE		= 0x02,
+	HBM_ENABLED		= 0x04
+};
+
+enum {
 	DSI_PANEL_MODE_OFF = 0,
 	DSI_PANEL_MODE_SRGB,
 	DSI_PANEL_MODE_DCI_P3,
@@ -113,6 +119,9 @@ int mdss_livedisplay_update(struct mdss_dsi_ctrl_pdata *ctrl_pdata, int types);
 int mdss_livedisplay_parse_dt(struct device_node *np, struct mdss_panel_info *pinfo);
 int mdss_livedisplay_create_sysfs(struct msm_fb_data_type *mfd);
 int mdss_livedisplay_event(struct msm_fb_data_type *mfd, int types);
+
+int mdss_livedisplay_set_panel_hbm_allowed(struct mdss_dsi_ctrl_pdata *ctrl_pdata, 
+		int is_allowed);
 
 int mdss_livedisplay_get_panel_mode(struct mdss_dsi_ctrl_pdata *ctrl_pdata, 
 		int mode);
