@@ -231,12 +231,6 @@ static int msm_mpm_gpio_chip_set_type(struct irq_data *d, unsigned int type)
 	return 0;
 }
 
-static int msm_mpm_gpio_chip_set_wake(struct irq_data *d, unsigned int on)
-{
-	msm_mpm_enable_irq(d, on);
-	return 0;
-}
-
 static void msm_mpm_gic_chip_mask(struct irq_data *d)
 {
 	msm_mpm_enable_irq(d, false);
@@ -253,24 +247,6 @@ static int msm_mpm_gic_chip_set_type(struct irq_data *d, unsigned int type)
 {
 	msm_mpm_set_type(d, type);
 	return irq_chip_set_type_parent(d, type);
-}
-
-static void msm_mpm_gic_chip_enable(struct irq_data *d)
-{
-	msm_mpm_enable_irq(d, true);
-	irq_chip_enable_parent(d);
-}
-
-static void msm_mpm_gic_chip_disable(struct irq_data *d)
-{
-	msm_mpm_enable_irq(d, false);
-	irq_chip_disable_parent(d);
-}
-
-static int msm_mpm_gic_chip_set_wake(struct irq_data *d, unsigned int on)
-{
-	msm_mpm_enable_irq(d, on);
-	return irq_chip_set_wake_parent(d, on);
 }
 
 static int msm_mpm_gic_get_irqchip_state(struct irq_data *d,
@@ -291,13 +267,11 @@ static struct irq_chip msm_mpm_gic_chip = {
 	.name		= "mpm-gic",
 	.irq_eoi	= irq_chip_eoi_parent,
 	.irq_mask	= msm_mpm_gic_chip_mask,
-	.irq_disable	= msm_mpm_gic_chip_disable,
+	.irq_disable	= msm_mpm_gic_chip_mask,
 	.irq_unmask	= msm_mpm_gic_chip_unmask,
-	.irq_enable	= msm_mpm_gic_chip_enable,
 	.irq_retrigger	= irq_chip_retrigger_hierarchy,
 	.irq_set_type	= msm_mpm_gic_chip_set_type,
-	.irq_set_wake	= msm_mpm_gic_chip_set_wake,
-	.flags		= IRQCHIP_MASK_ON_SUSPEND,
+	.flags		= IRQCHIP_MASK_ON_SUSPEND | IRQCHIP_SKIP_SET_WAKE,
 	.irq_set_affinity	= irq_chip_set_affinity_parent,
 	.irq_get_irqchip_state 	= msm_mpm_gic_get_irqchip_state,
 	.irq_set_irqchip_state	= msm_mpm_gic_set_irqchip_state,
@@ -308,9 +282,8 @@ static struct irq_chip msm_mpm_gpio_chip = {
 	.irq_mask	= msm_mpm_gpio_chip_mask,
 	.irq_disable	= msm_mpm_gpio_chip_mask,
 	.irq_unmask	= msm_mpm_gpio_chip_unmask,
-	.irq_enable	= msm_mpm_gpio_chip_unmask,
 	.irq_set_type	= msm_mpm_gpio_chip_set_type,
-	.irq_set_wake	= msm_mpm_gpio_chip_set_wake,
+	.flags		= IRQCHIP_MASK_ON_SUSPEND | IRQCHIP_SKIP_SET_WAKE,
 	.irq_retrigger          = irq_chip_retrigger_hierarchy,
 };
 
@@ -749,15 +722,6 @@ static int __init mpm_gic_chip_init(struct device_node *node,
 		goto mpm_map_err;
 	}
 
-	if (of_property_read_bool(node, "qcom,mpm-skip-set-wake"))
-		msm_mpm_gic_chip.flags |= IRQCHIP_SKIP_SET_WAKE;
-
-	if (of_property_read_bool(node,
-				  "qcom,mpm-irq-disable-not-supported")) {
-		msm_mpm_gic_chip.irq_enable = NULL;
-		msm_mpm_gic_chip.irq_disable = msm_mpm_gic_chip_mask;
-	}
-
 	msm_mpm_dev_data.gic_chip_domain = irq_domain_add_hierarchy(
 			parent_domain, 0, num_mpm_irqs, node,
 			&msm_mpm_gic_chip_domain_ops, (void *)id->data);
@@ -789,16 +753,6 @@ static int __init mpm_gpio_chip_init(struct device_node *node,
 		pr_err("match_table not found for mpm-gpio\n");
 		return -ENODEV;
 	}
-
-	if (of_property_read_bool(node, "qcom,mpm-gpio-skip-set-wake"))
-		msm_mpm_gpio_chip.flags |= IRQCHIP_SKIP_SET_WAKE;
-
-	if (of_property_read_bool(node, "qcom,mpm-gpio-mask-on-suspend"))
-		msm_mpm_gpio_chip.flags |= IRQCHIP_MASK_ON_SUSPEND;
-
-	if (of_property_read_bool(node,
-				  "qcom,mpm-gpio-irq-enabled-by-firmware"))
-		msm_mpm_gpio_chip.irq_enable = NULL;
 
 	msm_mpm_dev_data.gpio_chip_domain = irq_domain_create_linear(
 			of_node_to_fwnode(node), num_mpm_irqs,
