@@ -120,7 +120,7 @@ int mdss_livedisplay_parse_dt(struct device_node *np, struct mdss_panel_info *pi
 int mdss_livedisplay_create_sysfs(struct msm_fb_data_type *mfd);
 int mdss_livedisplay_event(struct msm_fb_data_type *mfd, int types);
 
-int mdss_livedisplay_set_panel_hbm_allowed(struct mdss_dsi_ctrl_pdata *ctrl_pdata, 
+void mdss_livedisplay_set_panel_hbm_allowed(struct mdss_dsi_ctrl_pdata *ctrl_pdata, 
 		int is_allowed);
 
 int mdss_livedisplay_get_panel_mode(struct mdss_dsi_ctrl_pdata *ctrl_pdata, 

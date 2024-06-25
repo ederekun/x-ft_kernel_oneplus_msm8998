@@ -43,7 +43,7 @@
  *      the panel devicetree. Boolean.
  *
  * hbm: Auto High Brightness Mode. Common for OLED panels. Boolean.
- *      Only turns on at 80% and above of max backlight level.
+ *      Automatically turns on at 80% and above of max backlight level.
  *
  * preset: Arbitrary DSI commands, up to 10 may be configured.
  *      Useful for gamma calibration.
@@ -55,7 +55,7 @@
 static inline bool mdss_livedisplay_get_hbm_flag(struct mdss_livedisplay_ctx *mlc, 
 		unsigned int flag)
 {
-	return (mlc->hbm_flags & flag) == flag;
+	return (mlc->hbm_flags & flag);
 }
 
 static inline bool mdss_livedisplay_hbm_should_update(struct mdss_livedisplay_ctx *mlc)
@@ -71,10 +71,14 @@ static inline bool mdss_livedisplay_hbm_should_update(struct mdss_livedisplay_ct
 static inline void mdss_livedisplay_set_hbm_flag(struct mdss_livedisplay_ctx *mlc, 
 		unsigned int flag, bool state)
 {
+	DEFINE_RAW_SPINLOCK(hbm_write_lock);
+
+	raw_spin_lock(&hbm_write_lock);
 	if (state)
 		mlc->hbm_flags |= flag;
 	else
 		mlc->hbm_flags &= ~flag;
+	raw_spin_unlock(&hbm_write_lock);
 }
 
 extern void mdss_dsi_panel_cmds_send(struct mdss_dsi_ctrl_pdata *ctrl,
@@ -349,7 +353,7 @@ int mdss_livedisplay_event(struct msm_fb_data_type *mfd, int types)
 	return rc;
 }
 
-int mdss_livedisplay_set_panel_hbm_allowed(struct mdss_dsi_ctrl_pdata *ctrl_pdata, 
+void mdss_livedisplay_set_panel_hbm_allowed(struct mdss_dsi_ctrl_pdata *ctrl_pdata, 
 		int is_allowed)
 {
 	struct mdss_panel_info *pinfo = NULL;
@@ -357,11 +361,11 @@ int mdss_livedisplay_set_panel_hbm_allowed(struct mdss_dsi_ctrl_pdata *ctrl_pdat
 
 	pinfo = &(ctrl_pdata->panel_data.panel_info);
 	if (pinfo == NULL)
-		return false;
+		return;
 
 	mlc = pinfo->livedisplay;
 	if (mlc == NULL)
-		return false;
+		return;
 
 	mdss_livedisplay_set_hbm_flag(mlc, HBM_ALLOWED, !!is_allowed);
 	if (mdss_livedisplay_hbm_should_update(mlc))
