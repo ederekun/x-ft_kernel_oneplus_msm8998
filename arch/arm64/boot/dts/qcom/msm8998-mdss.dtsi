@@ -48,8 +48,8 @@
 		/* VBIF QoS remapper settings*/
 		qcom,mdss-vbif-qos-rt-setting = <1 2 2 2>;
 		qcom,mdss-vbif-qos-nrt-setting = <1 1 1 1>;
-		qcom,vbif-settings = <0x00ac 0x00000040>,
-				     <0x00d0 0x00001010>; /* v1 only */
+		qcom,vbif-settings = <0x00ac 0x00008040>,
+				     <0x00d0 0x00002828>;
 
 		qcom,mdss-has-panic-ctrl;
 		qcom,mdss-per-pipe-panic-luts = <0x000f>,
