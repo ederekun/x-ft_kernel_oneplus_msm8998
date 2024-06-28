@@ -813,17 +813,24 @@ static bool gic_dist_security_disabled(void)
 static int gic_cpu_pm_notifier(struct notifier_block *self,
 			       unsigned long cmd, void *v)
 {
-	if (from_suspend)
-		return NOTIFY_OK;
-
-	if (cmd == CPU_PM_EXIT) {
-		if (gic_dist_security_disabled())
-			gic_enable_redist(true);
-		gic_cpu_sys_reg_init();
-	} else if (cmd == CPU_PM_ENTER && gic_dist_security_disabled()) {
-		gic_write_grpen1(0);
-		gic_enable_redist(false);
+	switch (cmd) {
+		case CPU_PM_ENTER_FAILED: 
+			/* Reenable dist and reinit sys_regs if PM failed */
+		case CPU_PM_EXIT:
+			if (gic_dist_security_disabled())
+				gic_enable_redist(true);
+			gic_cpu_sys_reg_init();
+			break;
+		case CPU_PM_ENTER:
+			if (from_suspend)
+				break;
+			if (!gic_dist_security_disabled())
+				break;
+			gic_write_grpen1(0);
+			gic_enable_redist(false);
+			break;
 	}
+
 	return NOTIFY_OK;
 }
 
