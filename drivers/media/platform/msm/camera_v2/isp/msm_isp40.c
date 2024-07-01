@@ -41,8 +41,7 @@
 #define VFE40_EQUAL_SLICE_UB 190 /* (UB_SIZE - STATS SIZE)/6 */
 #define VFE40_EQUAL_SLICE_UB_8916 236
 #define VFE40_TOTAL_WM_UB 1144 /* UB_SIZE - STATS SIZE */
-#define VFE40_TOTAL_WM_UB_8916 2680
-#define VFE40_TOTAL_WM_UB_8976 1656
+#define VFE40_TOTAL_WM_UB_8916 1656
 #define VFE40_WM_BASE(idx) (0x6C + 0x24 * idx)
 #define VFE40_RDI_BASE(idx) (0x2E8 + 0x4 * idx)
 #define VFE40_XBAR_BASE(idx) (0x58 + 0x4 * (idx / 2))
@@ -108,19 +107,8 @@ static uint32_t msm_vfe40_get_ub_size(struct vfe_device *vfe_dev)
 {
 	uint32_t ub_size = VFE40_TOTAL_WM_UB;
 
-	if (vfe_dev->vfe_hw_version == VFE40_8916_VERSION ||
-		vfe_dev->vfe_hw_version == VFE40_8939_VERSION ||
-		vfe_dev->vfe_hw_version == VFE40_8937_VERSION ||
-		vfe_dev->vfe_hw_version == VFE40_8953_VERSION ||
-		vfe_dev->vfe_hw_version == VFE40_8917_VERSION) {
+	if (vfe_dev->vfe_hw_version == VFE40_8916_VERSION)
 		ub_size = VFE40_TOTAL_WM_UB_8916;
-	}
-
-	/* Special handling for 8x56/8x76 */
-	if (of_machine_is_compatible("qcom,msm8956") ||
-	    of_machine_is_compatible("qcom,apq8056") ||
-	    of_machine_is_compatible("qcom,msm8976"))
-		ub_size = VFE40_TOTAL_WM_UB_8976;
 
 	vfe_dev->ub_info->wm_ub = ub_size;
 	return ub_size;
@@ -604,11 +592,6 @@ static void msm_vfe40_read_and_clear_irq_status(struct vfe_device *vfe_dev,
 
 	*irq_status0 &= vfe_dev->irq0_mask;
 	*irq_status1 &= vfe_dev->irq1_mask;
-	if (*irq_status0 &&
-		(*irq_status0 == msm_camera_io_r(vfe_dev->vfe_base + 0x38))) {
-		msm_camera_io_w(*irq_status0, vfe_dev->vfe_base + 0x30);
-		msm_camera_io_w_mb(1, vfe_dev->vfe_base + 0x24);
-	}
 
 	if (*irq_status1 & (1 << 0)) {
 		vfe_dev->error_info.camif_status =
@@ -2242,7 +2225,7 @@ static struct msm_vfe_axi_hardware_info msm_vfe40_axi_hw_info = {
 	.num_comp_mask = 3,
 	.num_rdi = 3,
 	.num_rdi_master = 3,
-	.min_wm_ub = 96,
+	.min_wm_ub = 64,
 	.scratch_buf_range = SZ_32M + SZ_4M,
 };
 

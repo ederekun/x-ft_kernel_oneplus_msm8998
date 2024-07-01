@@ -579,7 +579,6 @@ void msm_vfe47_process_error_status(struct vfe_device *vfe_dev)
 void msm_vfe47_read_and_clear_irq_status(struct vfe_device *vfe_dev,
 	uint32_t *irq_status0, uint32_t *irq_status1)
 {
-	uint32_t count = 0;
 	*irq_status0 = msm_camera_io_r(vfe_dev->vfe_base + 0x6C);
 	*irq_status1 = msm_camera_io_r(vfe_dev->vfe_base + 0x70);
 
@@ -590,14 +589,6 @@ void msm_vfe47_read_and_clear_irq_status(struct vfe_device *vfe_dev,
 	msm_camera_io_w(*irq_status0, vfe_dev->vfe_base + 0x64);
 	msm_camera_io_w(*irq_status1, vfe_dev->vfe_base + 0x68);
 	msm_camera_io_w_mb(1, vfe_dev->vfe_base + 0x58);
-	/* check if status register is cleared if not clear again*/
-	while (*irq_status0 &&
-		(*irq_status0 & msm_camera_io_r(vfe_dev->vfe_base + 0x6C)) &&
-		(count < MAX_RECOVERY_THRESHOLD)) {
-		msm_camera_io_w(*irq_status0, vfe_dev->vfe_base + 0x64);
-		msm_camera_io_w_mb(1, vfe_dev->vfe_base + 0x58);
-		count++;
-	}
 
 	if (*irq_status1 & (1 << 0)) {
 		vfe_dev->error_info.camif_status =
@@ -2643,7 +2634,6 @@ int msm_vfe47_get_clks(struct vfe_device *vfe_dev)
 	if (rc)
 		return rc;
 
-	vfe_dev->num_norm_clk = vfe_dev->num_clk;
 	for (i = 0; i < vfe_dev->num_clk; i++) {
 		if (strcmp(vfe_dev->vfe_clk_info[i].clk_name,
 				"camss_vfe_stream_clk") == 0) {

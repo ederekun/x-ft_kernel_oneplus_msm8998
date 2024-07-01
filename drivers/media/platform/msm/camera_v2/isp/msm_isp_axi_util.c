@@ -254,7 +254,6 @@ static int msm_isp_validate_axi_request(struct vfe_device *vfe_dev,
 	case V4L2_PIX_FMT_META:
 	case V4L2_PIX_FMT_META10:
 	case V4L2_PIX_FMT_GREY:
-	case V4L2_PIX_FMT_Y10:
 		stream_info->num_planes = 1;
 		stream_info->format_factor = ISP_Q2;
 		break;
@@ -364,7 +363,6 @@ static uint32_t msm_isp_axi_get_plane_size(
 	case V4L2_PIX_FMT_QGRBG10:
 	case V4L2_PIX_FMT_QRGGB10:
 	case V4L2_PIX_FMT_META10:
-	case V4L2_PIX_FMT_Y10:
 		/* TODO: fix me */
 		size = plane_cfg[plane_idx].output_height *
 		plane_cfg[plane_idx].output_width;
@@ -1852,9 +1850,6 @@ void msm_isp_halt_send_error(struct vfe_device *vfe_dev, uint32_t event)
 	struct msm_vfe_axi_halt_cmd halt_cmd;
 	struct vfe_device *temp_dev = NULL;
 	uint32_t irq_status0 = 0, irq_status1 = 0;
-	struct vfe_device *vfe_dev_other = NULL;
-	uint32_t vfe_id_other = 0;
-	unsigned long flags;
 
 	if (atomic_read(&vfe_dev->error_info.overflow_state) !=
 		NO_OVERFLOW)
@@ -1863,31 +1858,6 @@ void msm_isp_halt_send_error(struct vfe_device *vfe_dev, uint32_t event)
 
 	/* if there are no active streams - do not start recovery */
 	if (!vfe_dev->axi_data.num_active_stream)
-		return;
-
-	/* if there are no active streams - do not start recovery */
-	if (vfe_dev->is_split) {
-		if (vfe_dev->pdev->id == ISP_VFE0)
-			vfe_id_other = ISP_VFE1;
-		else
-			vfe_id_other = ISP_VFE0;
-
-		spin_lock_irqsave(
-			&vfe_dev->common_data->common_dev_data_lock, flags);
-		vfe_dev_other = vfe_dev->common_data->dual_vfe_res->vfe_dev[
-			vfe_id_other];
-		if (!vfe_dev->axi_data.num_active_stream ||
-			!vfe_dev_other->axi_data.num_active_stream) {
-			spin_unlock_irqrestore(
-				&vfe_dev->common_data->common_dev_data_lock,
-				flags);
-			pr_err("%s:skip the recovery as no active streams\n",
-				 __func__);
-			return;
-		}
-		spin_unlock_irqrestore(
-			&vfe_dev->common_data->common_dev_data_lock, flags);
-	} else if (!vfe_dev->axi_data.num_active_stream)
 		return;
 
 	if (event == ISP_EVENT_PING_PONG_MISMATCH &&
@@ -2694,18 +2664,6 @@ int msm_isp_ab_ib_update_lpm_mode(struct vfe_device *vfe_dev, void *arg)
 	ab_ib_vote = (struct msm_vfe_dual_lpm_mode *)arg;
 	if (!ab_ib_vote) {
 		pr_err("%s: ab_ib_vote is NULL !!!\n", __func__);
-		rc = -1;
-		return rc;
-	}
-	if (ab_ib_vote->num_src >= VFE_AXI_SRC_MAX) {
-		pr_err("%s: ab_ib_vote num_src is exceeding limit\n",
-			__func__);
-		rc = -1;
-		return rc;
-	}
-	if (ab_ib_vote->num_src >= VFE_AXI_SRC_MAX) {
-		pr_err("%s: ab_ib_vote num_src is exceeding limit\n",
-			__func__);
 		rc = -1;
 		return rc;
 	}
@@ -3683,7 +3641,7 @@ static int msm_isp_return_empty_buffer(struct vfe_device *vfe_dev,
 	buf->buf_debug.put_state[buf->buf_debug.put_state_last] =
 		MSM_ISP_BUFFER_STATE_DROP_REG;
 	buf->buf_debug.put_state_last ^= 1;
-	rc = vfe_dev->buf_mgr->ops->buf_err(vfe_dev->buf_mgr,
+	rc = vfe_dev->buf_mgr->ops->buf_done(vfe_dev->buf_mgr,
 		buf->bufq_handle, buf->buf_idx,
 		&timestamp.buf_time, frame_id,
 		stream_info->runtime_output_format);
@@ -4069,6 +4027,13 @@ static int msm_isp_stream_axi_cfg_update(struct vfe_device *vfe_dev,
 	unsigned long flags;
 	int vfe_idx;
 
+	if (atomic_read(&vfe_dev->axi_data.axi_cfg_update[
+		SRC_TO_INTF(stream_info->stream_src)])) {
+		pr_err("%s: Update in progress for vfe %d intf %d\n",
+			__func__, vfe_dev->pdev->id,
+			SRC_TO_INTF(stream_info->stream_src));
+		return -EINVAL;
+	}
 	spin_lock_irqsave(&stream_info->lock, flags);
 	if (stream_info->state != ACTIVE) {
 		spin_unlock_irqrestore(&stream_info->lock, flags);
