@@ -832,6 +832,13 @@ static const struct rpm_smd_clk_desc rpm_clk_msm8996 = {
 DEFINE_CLK_SMD_RPM_BRANCH(msm8998, bi_tcxo, bi_tcxo_ao, QCOM_SMD_RPM_MISC_CLK,
 			  0, 19200000);
 DEFINE_CLK_SMD_RPM(msm8998, bimc_clk, bimc_a_clk, QCOM_SMD_RPM_MEM_CLK, 0);
+static struct clk_init_data bimc_clk_parent_fixup = {
+	.ops = &clk_smd_rpm_ops,
+	.name = "bimc_clk",
+	.flags = CLK_ENABLE_HAND_OFF,
+	.parent_names = (const char *[]){ "bi_tcxo" },
+	.num_parents = 1,
+};
 DEFINE_CLK_SMD_RPM(msm8998, cnoc_periph_clk, cnoc_periph_a_clk,
 		   QCOM_SMD_RPM_BUS_CLK, 0);
 DEFINE_CLK_SMD_RPM(msm8998, snoc_clk, snoc_a_clk, QCOM_SMD_RPM_BUS_CLK, 1);
@@ -1358,6 +1365,9 @@ static int rpm_smd_clk_probe(struct platform_device *pdev)
 		ret = clk_vote_bimc(&msm8998_bimc_clk.hw, INT_MAX);
 		if (ret < 0)
 			return ret;
+
+		/* Set bi_tcxo as parent for bimc_clk to avoid bi_tcxo shutdown */
+		msm8998_bimc_clk.hw.init = &bimc_clk_parent_fixup;
 	} else if (is_8996) {
 		ret = clk_vote_bimc(&msm8996_bimc_clk.hw, INT_MAX);
 		if (ret < 0)
