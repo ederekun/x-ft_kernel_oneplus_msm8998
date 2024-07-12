@@ -1998,6 +1998,7 @@ static struct clk_branch gcc_bimc_gfx_clk = {
 		.enable_mask = BIT(0),
 		.hw.init = &(struct clk_init_data) {
 			.name = "gcc_bimc_gfx_clk",
+			.flags = CLK_IS_CRITICAL,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -2077,6 +2078,7 @@ static struct clk_branch gcc_gpu_cfg_ahb_clk = {
 		.enable_mask = BIT(0),
 		.hw.init = &(struct clk_init_data) {
 			.name = "gcc_gpu_cfg_ahb_clk",
+			.flags = CLK_IS_CRITICAL,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -2114,6 +2116,7 @@ static struct clk_branch gcc_mmss_noc_cfg_ahb_clk = {
 		.enable_mask = BIT(0),
 		.hw.init = &(struct clk_init_data) {
 			.name = "gcc_mmss_noc_cfg_ahb_clk",
+			.flags = CLK_IS_CRITICAL,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -3284,15 +3287,6 @@ static int gcc_msm8998_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "Failed to register GCC clocks\n");
 		return ret;
 	}
-
-	/* This clock is used for all MMSSCC register access */
-	clk_prepare_enable(gcc_mmss_noc_cfg_ahb_clk.clkr.hw.clk);
-
-	/* Keep bimc gfx clock port on all the time */
-	clk_prepare_enable(gcc_bimc_gfx_clk.clkr.hw.clk);
-
-	/* This clock is used for all GPUCC register access */
-	clk_prepare_enable(gcc_gpu_cfg_ahb_clk.clkr.hw.clk);
 
 	/* Set the HMSS_GPLL0_SRC for 300MHz to CPU subsystem */
 	clk_set_rate(hmss_gpll0_clk_src.clkr.hw.clk, 300000000);
