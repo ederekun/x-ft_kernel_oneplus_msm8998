@@ -3660,6 +3660,31 @@ static void msm_mmsscc_v2_fixup(void)
 	csi3_clk_src.clkr.hw.init->rate_max[VDD_DIG_NOMINAL] = 480000000;
 }
 
+static void msm_mmsscc_oneplus_fixup(void)
+{
+#if defined(CONFIG_ARCH_ONEPLUS_DUMPLING) || defined(CONFIG_ARCH_ONEPLUS_CHEESEBURGER)
+	mmcc_msm8998_clocks[DP_AUX_CLK_SRC] = NULL;
+	mmcc_msm8998_clocks[DP_CRYPTO_CLK_SRC] = NULL;
+	mmcc_msm8998_clocks[DP_GTC_CLK_SRC] = NULL;
+	mmcc_msm8998_clocks[DP_LINK_CLK_SRC] = NULL;
+	mmcc_msm8998_clocks[DP_PIXEL_CLK_SRC] = NULL;
+
+	mmcc_msm8998_clocks[MMSS_MDSS_DP_AUX_CLK] = NULL;
+	mmcc_msm8998_clocks[MMSS_MDSS_DP_CRYPTO_CLK] = NULL;
+	mmcc_msm8998_clocks[MMSS_MDSS_DP_PIXEL_CLK] = NULL;
+	mmcc_msm8998_clocks[MMSS_MDSS_DP_LINK_CLK] = NULL;
+	mmcc_msm8998_clocks[MMSS_MDSS_DP_LINK_INTF_CLK] = NULL;
+	mmcc_msm8998_clocks[MMSS_MDSS_DP_GTC_CLK] = NULL;
+
+	mmcc_msm8998_clocks[HDMI_CLK_SRC] = NULL;
+	mmcc_msm8998_clocks[EXTPCLK_CLK_SRC] = NULL;
+
+	mmcc_msm8998_clocks[MMSS_MDSS_HDMI_CLK] = NULL;
+	mmcc_msm8998_clocks[MMSS_MDSS_HDMI_DP_AHB_CLK] = NULL;
+	mmcc_msm8998_clocks[MMSS_MDSS_EXTPCLK_CLK] = NULL;
+#endif
+}
+
 static int mmcc_msm8998_probe(struct platform_device *pdev)
 {
 	int ret = 0;
@@ -3695,6 +3720,8 @@ static int mmcc_msm8998_probe(struct platform_device *pdev)
 		msm_mmsscc_hamster_fixup();
 		msm_mmsscc_v2_fixup();
 	}
+
+	msm_mmsscc_oneplus_fixup();
 
 	//clk_fabia_pll_configure(&mmpll0, regmap, &mmpll0_config);
 	//clk_fabia_pll_configure(&mmpll1, regmap, &mmpll1_config);
