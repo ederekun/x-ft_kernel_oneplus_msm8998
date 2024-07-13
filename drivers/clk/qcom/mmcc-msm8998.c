@@ -3738,6 +3738,10 @@ static int mmcc_msm8998_probe(struct platform_device *pdev)
 		return ret;
 	}
 
+	/* Set FSM Mode on MMPLL0 and MMPLL1 (write to PLL_MODE register) */
+	qcom_pll_set_fsm_mode(mmpll0.clkr.regmap, mmpll0.offset, 6, 0);
+	qcom_pll_set_fsm_mode(mmpll1.clkr.regmap, mmpll1.offset, 6, 0);
+
 	dev_info(&pdev->dev, "Registered MMSS clocks\n");
 
 	return platform_driver_register(&mmcc_voters_msm8998_driver);
