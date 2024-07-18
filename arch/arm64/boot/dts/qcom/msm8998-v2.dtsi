@@ -460,17 +460,6 @@
 	qcom,hw-timer-hz = <19200000>;
 };
 
-&devfreq_cpufreq {
-	mincpubw-cpufreq {
-		cpu-to-dev-map-0 =
-			< 1900800 MHZ_TO_MBPS( 200,  8) >;
-		cpu-to-dev-map-4 =
-			< 2112000 MHZ_TO_MBPS( 200,  8) >,
-			< 2342400 MHZ_TO_MBPS( 681,  8) >,
-			< 2496000 MHZ_TO_MBPS( 1804, 8) >;
-	};
-};
-
 &devfreq_memlat_0 {
 	qcom,core-dev-table =
 		<  300000 MHZ_TO_MBPS( 200,  8) >,

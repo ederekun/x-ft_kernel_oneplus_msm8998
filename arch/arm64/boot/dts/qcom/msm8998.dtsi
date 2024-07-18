@@ -988,7 +988,6 @@
 		governor = "powersave";
 		qcom,src-dst-ports = <1 512>;
 		qcom,active-only;
-		status = "ok";
 		operating-points-v2 = <&ddr_bw_opp_table>;
 	};
 
@@ -996,6 +995,8 @@
 		compatible = "qcom,arm-memlat-mon";
 		qcom,cpulist =	<&CPU0 &CPU1 &CPU2 &CPU3>;
 		qcom,target-dev = <&memlat_cpu0>;
+		qcom,cachemiss-ev = <0x17>;
+		qcom,stall-cycle-ev = <0xE7>;
 		qcom,core-dev-table =
 			<  300000 MHZ_TO_MBPS( 200,  8) >,
 			<  499200 MHZ_TO_MBPS( 412,  8) >,
@@ -1007,6 +1008,8 @@
 		compatible = "qcom,arm-memlat-mon";
 		qcom,cpulist =	<&CPU4 &CPU5 &CPU6 &CPU7>;
 		qcom,target-dev = <&memlat_cpu4>;
+		qcom,cachemiss-ev = <0x17>;
+		qcom,stall-cycle-ev = <0x24>;
 		qcom,core-dev-table =
 			<  300000 MHZ_TO_MBPS( 200,  8) >,
 			<  480000 MHZ_TO_MBPS( 412,  8) >,
@@ -1015,17 +1018,6 @@
 			< 1296000 MHZ_TO_MBPS( 1296, 8) >,
 			< 1555000 MHZ_TO_MBPS( 1555, 8) >,
 			< 1804000 MHZ_TO_MBPS( 1804, 8) >;
-	};
-
-	devfreq_cpufreq: devfreq-cpufreq {
-		mincpubw-cpufreq {
-			target-dev = <&mincpubw>;
-			cpu-to-dev-map-0 =
-				< 1881600 MHZ_TO_MBPS( 200,  8) >;
-			cpu-to-dev-map-4 =
-				< 2016000 MHZ_TO_MBPS( 200,  8) >,
-				< 2092800 MHZ_TO_MBPS( 681,  8) >;
-		};
 	};
 
 	msm_cpufreq: qcom,msm-cpufreq {
