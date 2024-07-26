@@ -1,4 +1,5 @@
-/* Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
+/*
+ * Copyright (c) 2012-2016, 2018-2019 The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -8,7 +9,6 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
  */
 #ifndef __H_VIDC_HFI_H__
 #define __H_VIDC_HFI_H__
@@ -56,7 +56,15 @@
 #define  HFI_ERR_SESSION_START_CODE_NOT_FOUND		\
 	(HFI_OX_BASE + 0x1004)
 
+#define HFI_BUFFER_INTERNAL_SCRATCH (HFI_OX_BASE + 0x1)
+#define HFI_BUFFER_EXTRADATA_INPUT (HFI_OX_BASE + 0x2)
+#define HFI_BUFFER_EXTRADATA_OUTPUT (HFI_OX_BASE + 0x3)
+#define HFI_BUFFER_EXTRADATA_OUTPUT2 (HFI_OX_BASE + 0x4)
+#define HFI_BUFFER_INTERNAL_SCRATCH_1 (HFI_OX_BASE + 0x5)
+#define HFI_BUFFER_INTERNAL_SCRATCH_2 (HFI_OX_BASE + 0x6)
 
+#define HFI_BUFFER_MODE_STATIC (HFI_OX_BASE + 0x1)
+#define HFI_BUFFER_MODE_RING (HFI_OX_BASE + 0x2)
 #define HFI_BUFFER_MODE_DYNAMIC (HFI_OX_BASE + 0x3)
 
 #define HFI_FLUSH_INPUT (HFI_OX_BASE + 0x1)
@@ -66,6 +74,8 @@
 #define HFI_EXTRADATA_NONE					0x00000000
 #define HFI_EXTRADATA_MB_QUANTIZATION		0x00000001
 #define HFI_EXTRADATA_INTERLACE_VIDEO		0x00000002
+#define HFI_EXTRADATA_VC1_FRAMEDISP			0x00000003
+#define HFI_EXTRADATA_VC1_SEQDISP			0x00000004
 #define HFI_EXTRADATA_TIMESTAMP				0x00000005
 #define HFI_EXTRADATA_S3D_FRAME_PACKING		0x00000006
 #define HFI_EXTRADATA_FRAME_RATE			0x00000007
@@ -76,7 +86,6 @@
 #define HFI_EXTRADATA_FRAME_QP			0x0000000F
 #define HFI_EXTRADATA_FRAME_BITS_INFO		0x00000010
 #define HFI_EXTRADATA_VPX_COLORSPACE		0x00000014
-#define HFI_EXTRADATA_UBWC_CR_STAT_INFO		0x00000019
 #define HFI_EXTRADATA_MULTISLICE_INFO		0x7F100000
 #define HFI_EXTRADATA_NUM_CONCEALED_MB		0x7F100001
 #define HFI_EXTRADATA_INDEX					0x7F100002
@@ -112,7 +121,6 @@ struct hfi_extradata_header {
 #define HFI_INTERLACE_INTERLEAVE_FRAME_BOTTOMFIELDFIRST	0x04
 #define HFI_INTERLACE_FRAME_TOPFIELDFIRST				0x08
 #define HFI_INTERLACE_FRAME_BOTTOMFIELDFIRST			0x10
-#define HFI_INTERLACE_FRAME_MBAFF					0x20
 
 #define HFI_PROPERTY_SYS_OX_START			\
 	(HFI_DOMAIN_BASE_COMMON + HFI_ARCH_OX_OFFSET + 0x0000)
@@ -131,13 +139,17 @@ struct hfi_extradata_header {
 	(HFI_PROPERTY_PARAM_OX_START + 0x005)
 #define HFI_PROPERTY_PARAM_INDEX_EXTRADATA             \
 	(HFI_PROPERTY_PARAM_OX_START + 0x006)
+#define HFI_PROPERTY_PARAM_DIVX_FORMAT					\
+	(HFI_PROPERTY_PARAM_OX_START + 0x007)
 #define HFI_PROPERTY_PARAM_BUFFER_ALLOC_MODE			\
 	(HFI_PROPERTY_PARAM_OX_START + 0x008)
 #define HFI_PROPERTY_PARAM_S3D_FRAME_PACKING_EXTRADATA	\
 	(HFI_PROPERTY_PARAM_OX_START + 0x009)
+#define HFI_PROPERTY_PARAM_ERR_DETECTION_CODE_EXTRADATA \
+	(HFI_PROPERTY_PARAM_OX_START + 0x00A)
 #define HFI_PROPERTY_PARAM_BUFFER_ALLOC_MODE_SUPPORTED	\
 	(HFI_PROPERTY_PARAM_OX_START + 0x00B)
-#define  HFI_PROPERTY_PARAM_BUFFER_SIZE_MINIMUM			\
+#define HFI_PROPERTY_PARAM_BUFFER_SIZE_MINIMUM			\
 	(HFI_PROPERTY_PARAM_OX_START + 0x00C)
 #define HFI_PROPERTY_PARAM_SYNC_BASED_INTERRUPT			\
 	(HFI_PROPERTY_PARAM_OX_START + 0x00E)
@@ -150,10 +162,15 @@ struct hfi_extradata_header {
 	(HFI_PROPERTY_CONFIG_OX_START + 0x002)
 #define HFI_PROPERTY_CONFIG_PRIORITY					\
 	(HFI_PROPERTY_CONFIG_OX_START + 0x003)
+#define HFI_PROPERTY_CONFIG_BATCH_INFO					\
+	(HFI_PROPERTY_CONFIG_OX_START + 0x004)
+
 #define HFI_PROPERTY_PARAM_VDEC_OX_START				\
 	(HFI_DOMAIN_BASE_VDEC + HFI_ARCH_OX_OFFSET + 0x3000)
 #define HFI_PROPERTY_PARAM_VDEC_CONTINUE_DATA_TRANSFER	\
 	(HFI_PROPERTY_PARAM_VDEC_OX_START + 0x001)
+#define HFI_PROPERTY_PARAM_VDEC_DISPLAY_PICTURE_BUFFER_COUNT\
+	(HFI_PROPERTY_PARAM_VDEC_OX_START + 0x002)
 #define HFI_PROPERTY_PARAM_VDEC_MULTI_VIEW_SELECT		\
 	(HFI_PROPERTY_PARAM_VDEC_OX_START + 0x003)
 #define HFI_PROPERTY_PARAM_VDEC_PICTURE_TYPE_DECODE		\
@@ -164,6 +181,8 @@ struct hfi_extradata_header {
 	(HFI_PROPERTY_PARAM_VDEC_OX_START + 0x006)
 #define HFI_PROPERTY_PARAM_VDEC_NUM_CONCEALED_MB		\
 	(HFI_PROPERTY_PARAM_VDEC_OX_START + 0x007)
+#define HFI_PROPERTY_PARAM_VDEC_H264_ENTROPY_SWITCHING	\
+	(HFI_PROPERTY_PARAM_VDEC_OX_START + 0x008)
 #define HFI_PROPERTY_PARAM_VDEC_OUTPUT2_KEEP_ASPECT_RATIO\
 	(HFI_PROPERTY_PARAM_VDEC_OX_START + 0x009)
 #define HFI_PROPERTY_PARAM_VDEC_FRAME_RATE_EXTRADATA  \
@@ -174,6 +193,13 @@ struct hfi_extradata_header {
 	(HFI_PROPERTY_PARAM_VDEC_OX_START + 0x00C)
 #define HFI_PROPERTY_PARAM_VDEC_THUMBNAIL_MODE   \
 	(HFI_PROPERTY_PARAM_VDEC_OX_START + 0x00D)
+
+#define HFI_PROPERTY_PARAM_VDEC_FRAME_ASSEMBLY		\
+	(HFI_PROPERTY_PARAM_VDEC_OX_START + 0x00E)
+#define HFI_PROPERTY_PARAM_VDEC_VC1_FRAMEDISP_EXTRADATA		\
+	(HFI_PROPERTY_PARAM_VDEC_OX_START + 0x011)
+#define HFI_PROPERTY_PARAM_VDEC_VC1_SEQDISP_EXTRADATA		\
+	(HFI_PROPERTY_PARAM_VDEC_OX_START + 0x012)
 #define HFI_PROPERTY_PARAM_VDEC_TIMESTAMP_EXTRADATA			\
 	(HFI_PROPERTY_PARAM_VDEC_OX_START + 0x013)
 #define HFI_PROPERTY_PARAM_VDEC_INTERLACE_VIDEO_EXTRADATA	\
@@ -188,6 +214,8 @@ struct hfi_extradata_header {
 	(HFI_PROPERTY_PARAM_VDEC_OX_START + 0x018)
 #define HFI_PROPERTY_PARAM_VDEC_FRAME_BITS_INFO_EXTRADATA \
 	(HFI_PROPERTY_PARAM_VDEC_OX_START + 0x019)
+#define HFI_PROPERTY_PARAM_VDEC_SCS_THRESHOLD \
+	(HFI_PROPERTY_PARAM_VDEC_OX_START + 0x01A)
 #define HFI_PROPERTY_PARAM_VUI_DISPLAY_INFO_EXTRADATA \
 	(HFI_PROPERTY_PARAM_VDEC_OX_START + 0x01B)
 #define HFI_PROPERTY_PARAM_VDEC_VQZIP_SEI_EXTRADATA \
@@ -198,15 +226,11 @@ struct hfi_extradata_header {
 	(HFI_PROPERTY_PARAM_VDEC_OX_START + 0x001E)
 #define HFI_PROPERTY_PARAM_VDEC_CONTENT_LIGHT_LEVEL_SEI_EXTRADATA \
 	(HFI_PROPERTY_PARAM_VDEC_OX_START + 0x001F)
-#define HFI_PROPERTY_PARAM_VDEC_COLOUR_REMAPPING_INFO_SEI_EXTRADATA	\
-	(HFI_PROPERTY_PARAM_VDEC_OX_START + 0x0020)
-#define HFI_PROPERTY_PARAM_VDEC_DOWN_SCALAR	\
-	(HFI_PROPERTY_PARAM_VDEC_OX_START + 0x0021)
-#define HFI_PROPERTY_PARAM_VDEC_UBWC_CR_STAT_INFO_EXTRADATA	\
-	(HFI_PROPERTY_PARAM_VDEC_OX_START + 0x0022)
 
 #define HFI_PROPERTY_CONFIG_VDEC_OX_START				\
 	(HFI_DOMAIN_BASE_VDEC + HFI_ARCH_OX_OFFSET + 0x4000)
+#define HFI_PROPERTY_CONFIG_VDEC_POST_LOOP_DEBLOCKER	\
+	(HFI_PROPERTY_CONFIG_VDEC_OX_START + 0x001)
 #define HFI_PROPERTY_CONFIG_VDEC_MB_ERROR_MAP_REPORTING	\
 	(HFI_PROPERTY_CONFIG_VDEC_OX_START + 0x002)
 #define HFI_PROPERTY_CONFIG_VDEC_MB_ERROR_MAP			\
@@ -226,17 +250,22 @@ struct hfi_extradata_header {
 	(HFI_PROPERTY_PARAM_VENC_OX_START + 0x005)
 #define HFI_PROPERTY_PARAM_VENC_FRAME_QP_EXTRADATA		\
 	(HFI_PROPERTY_PARAM_VENC_OX_START + 0x006)
+#define  HFI_PROPERTY_PARAM_VENC_YUVSTAT_INFO_EXTRADATA		\
+	(HFI_PROPERTY_PARAM_VENC_OX_START + 0x007)
 #define  HFI_PROPERTY_PARAM_VENC_ROI_QP_EXTRADATA		\
 	(HFI_PROPERTY_PARAM_VENC_OX_START + 0x008)
-#define HFI_PROPERTY_PARAM_VENC_HDR10PLUS_METADATA_EXTRADATA	\
-	(HFI_PROPERTY_PARAM_VENC_OX_START + 0x00A)
-#define HFI_PROPERTY_PARAM_VENC_DTS_INFO \
-	(HFI_PROPERTY_PARAM_VENC_OX_START + 0x00C)
+#define  HFI_PROPERTY_PARAM_VENC_OVERRIDE_QP_EXTRADATA		\
+	(HFI_PROPERTY_PARAM_VENC_OX_START + 0x009)
 
 #define HFI_PROPERTY_CONFIG_VENC_OX_START				\
 	(HFI_DOMAIN_BASE_VENC + HFI_ARCH_OX_OFFSET + 0x6000)
+#define  HFI_PROPERTY_CONFIG_VENC_FRAME_QP				\
+	(HFI_PROPERTY_CONFIG_VENC_OX_START + 0x001)
+
 #define HFI_PROPERTY_PARAM_VPE_OX_START					\
 	(HFI_DOMAIN_BASE_VPE + HFI_ARCH_OX_OFFSET + 0x7000)
+#define HFI_PROPERTY_PARAM_VPE_COLOR_SPACE_CONVERSION			\
+	(HFI_PROPERTY_PARAM_VPE_OX_START + 0x001)
 
 #define HFI_PROPERTY_CONFIG_VPE_OX_START				\
 	(HFI_DOMAIN_BASE_VPE + HFI_ARCH_OX_OFFSET + 0x8000)
@@ -249,7 +278,6 @@ struct hfi_batch_info {
 struct hfi_buffer_count_actual {
 	u32 buffer_type;
 	u32 buffer_count_actual;
-	u32 buffer_count_min_host;
 };
 
 struct hfi_buffer_size_minimum {
@@ -261,12 +289,19 @@ struct hfi_buffer_requirements {
 	u32 buffer_type;
 	u32 buffer_size;
 	u32 buffer_region_size;
+	u32 buffer_hold_count;
 	u32 buffer_count_min;
-	u32 buffer_count_min_host;
 	u32 buffer_count_actual;
 	u32 contiguous;
 	u32 buffer_alignment;
 };
+
+#define HFI_CHROMA_SITE_0			(HFI_OX_BASE + 0x1)
+#define HFI_CHROMA_SITE_1			(HFI_OX_BASE + 0x2)
+#define HFI_CHROMA_SITE_2			(HFI_OX_BASE + 0x3)
+#define HFI_CHROMA_SITE_3			(HFI_OX_BASE + 0x4)
+#define HFI_CHROMA_SITE_4			(HFI_OX_BASE + 0x5)
+#define HFI_CHROMA_SITE_5			(HFI_OX_BASE + 0x6)
 
 struct hfi_data_payload {
 	u32 size;
@@ -301,7 +336,6 @@ struct hfi_buffer_alloc_mode_supported {
 	u32 rg_data[1];
 };
 
-
 struct hfi_mb_error_map {
 	u32 error_map_size;
 	u8 rg_error_map[1];
@@ -334,7 +368,6 @@ struct hfi_hybrid_hierp {
 #define HFI_RATE_CONTROL_CBR_CFR	(HFI_OX_BASE + 0x5)
 #define HFI_RATE_CONTROL_MBR_CFR	(HFI_OX_BASE + 0x6)
 #define HFI_RATE_CONTROL_MBR_VFR	(HFI_OX_BASE + 0x7)
-#define HFI_RATE_CONTROL_CQ		(HFI_OX_BASE + 0x8)
 
 
 struct hfi_uncompressed_plane_actual_constraints_info {
@@ -368,14 +401,6 @@ struct hfi_uncompressed_plane_actual_constraints_info {
 #define HFI_CMD_SESSION_CONTINUE	(HFI_CMD_SESSION_OX_START + 0x00D)
 #define HFI_CMD_SESSION_SYNC		(HFI_CMD_SESSION_OX_START + 0x00E)
 
-#define HFI_CMD_SESSION_CVP_START	\
-	(HFI_DOMAIN_BASE_CVP + HFI_ARCH_COMMON_OFFSET +	\
-	HFI_CMD_START_OFFSET + 0x1000)
-#define HFI_CMD_SESSION_REGISTER_BUFFERS	\
-	(HFI_CMD_SESSION_CVP_START + 0x0A0)
-#define HFI_CMD_SESSION_UNREGISTER_BUFFERS	\
-	(HFI_CMD_SESSION_CVP_START + 0x0A1)
-
 #define HFI_MSG_SYS_OX_START			\
 (HFI_DOMAIN_BASE_COMMON + HFI_ARCH_OX_OFFSET + HFI_MSG_START_OFFSET + 0x0000)
 #define HFI_MSG_SYS_PING_ACK	(HFI_MSG_SYS_OX_START + 0x2)
@@ -394,16 +419,10 @@ struct hfi_uncompressed_plane_actual_constraints_info {
 #define HFI_MSG_SESSION_PROPERTY_INFO		(HFI_MSG_SESSION_OX_START + 0x9)
 #define HFI_MSG_SESSION_RELEASE_RESOURCES_DONE	\
 	(HFI_MSG_SESSION_OX_START + 0xA)
+#define HFI_MSG_SESSION_PARSE_SEQUENCE_HEADER_DONE		\
+	(HFI_MSG_SESSION_OX_START + 0xB)
 #define  HFI_MSG_SESSION_RELEASE_BUFFERS_DONE			\
 	(HFI_MSG_SESSION_OX_START + 0xC)
-
-#define HFI_MSG_SESSION_CVP_START	\
-	(HFI_DOMAIN_BASE_CVP + HFI_ARCH_COMMON_OFFSET +	\
-	HFI_MSG_START_OFFSET + 0x1000)
-#define HFI_MSG_SESSION_REGISTER_BUFFERS_DONE	\
-	(HFI_MSG_SESSION_CVP_START + 0x0A0)
-#define HFI_MSG_SESSION_UNREGISTER_BUFFERS_DONE	\
-	(HFI_MSG_SESSION_CVP_START + 0x0A1)
 
 #define VIDC_IFACEQ_MAX_PKT_SIZE                        1024
 #define VIDC_IFACEQ_MED_PKT_SIZE                        768
@@ -557,11 +576,24 @@ struct hfi_cmd_session_release_resources_packet {
 	u32 session_id;
 };
 
+struct hfi_cmd_session_parse_sequence_header_packet {
+	u32 size;
+	u32 packet_type;
+	u32 session_id;
+	u32 header_len;
+	u32 packet_buffer;
+};
+
 struct hfi_msg_sys_session_abort_done_packet {
 	u32 size;
 	u32 packet_type;
 	u32 session_id;
 	u32 error_type;
+};
+
+struct hfi_msg_sys_idle_packet {
+	u32 size;
+	u32 packet_type;
 };
 
 struct hfi_msg_sys_ping_ack_packet {
@@ -620,22 +652,6 @@ struct hfi_msg_session_flush_done_packet {
 	u32 flush_type;
 };
 
-struct hfi_ubwc_cr_stats_info_type {
-	u32 cr_stats_info0;
-	u32 cr_stats_info1;
-	u32 cr_stats_info2;
-	u32 cr_stats_info3;
-	u32 cr_stats_info4;
-	u32 cr_stats_info5;
-	u32 cr_stats_info6;
-};
-
-struct hfi_frame_cr_stats_type {
-	u32 frame_index;
-	struct hfi_ubwc_cr_stats_info_type ubwc_stats_info;
-	u32 complexity_number;
-};
-
 struct hfi_msg_session_empty_buffer_done_packet {
 	u32 size;
 	u32 packet_type;
@@ -646,8 +662,6 @@ struct hfi_msg_session_empty_buffer_done_packet {
 	u32 input_tag;
 	u32 packet_buffer;
 	u32 extra_data_buffer;
-	u32 flags;
-	struct hfi_frame_cr_stats_type ubwc_cr_stats;
 	u32 rgData[1];
 };
 
@@ -720,6 +734,15 @@ struct hfi_msg_session_fill_buffer_done_uncompressed_plane2_packet {
 	u32 rgData[0];
 };
 
+struct hfi_msg_session_parse_sequence_header_done_packet {
+	u32 size;
+	u32 packet_type;
+	u32 session_id;
+	u32 error_type;
+	u32 num_properties;
+	u32 rg_property_data[1];
+};
+
 struct hfi_msg_session_property_info_packet {
 	u32 size;
 	u32 packet_type;
@@ -744,24 +767,37 @@ struct hfi_msg_session_release_buffers_done_packet {
 	u32 rg_buffer_info[1];
 };
 
-struct hfi_msg_session_register_buffers_done_packet {
-	u32 size;
-	u32 packet_type;
-	u32 session_id;
-	u32 client_data;
-	u32 error_type;
-};
-
-struct hfi_msg_session_unregister_buffers_done_packet {
-	u32 size;
-	u32 packet_type;
-	u32 session_id;
-	u32 client_data;
-	u32 error_type;
-};
-
 struct hfi_extradata_mb_quantization_payload {
 	u8 rg_mb_qp[1];
+};
+
+struct hfi_extradata_vc1_pswnd {
+	u32 ps_wnd_h_offset;
+	u32 ps_wnd_v_offset;
+	u32 ps_wnd_width;
+	u32 ps_wnd_height;
+};
+
+struct hfi_extradata_vc1_framedisp_payload {
+	u32 res_pic;
+	u32 ref;
+	u32 range_map_present;
+	u32 range_map_y;
+	u32 range_map_uv;
+	u32 num_pan_scan_wnds;
+	struct hfi_extradata_vc1_pswnd rg_ps_wnd[1];
+};
+
+struct hfi_extradata_vc1_seqdisp_payload {
+	u32 prog_seg_frm;
+	u32 uv_sampling_fmt;
+	u32 color_fmt_flag;
+	u32 color_primaries;
+	u32 transfer_char;
+	u32 mat_coeff;
+	u32 aspect_ratio;
+	u32 aspect_horiz;
+	u32 aspect_vert;
 };
 
 struct hfi_extradata_timestamp_payload {
@@ -793,11 +829,6 @@ struct hfi_extradata_s3d_frame_packing_payload {
 
 struct hfi_extradata_interlace_video_payload {
 	u32 format;
-};
-
-struct hfi_conceal_color_type {
-	u32 value_8bit;
-	u32 value_10bit;
 };
 
 struct hfi_extradata_num_concealed_mb_payload {
@@ -851,6 +882,10 @@ struct hfi_index_extradata_aspect_ratio_payload {
 	u32 aspect_width;
 	u32 aspect_height;
 };
+struct hfi_extradata_panscan_wndw_payload {
+	u32 num_window;
+	struct hfi_extradata_vc1_pswnd wnd[1];
+};
 
 struct hfi_extradata_frame_type_payload {
 	u32 frame_rate;
@@ -866,17 +901,12 @@ struct hfi_cmd_session_continue_packet {
 	u32 session_id;
 };
 
-enum session_flags {
-	SESSION_PAUSE = BIT(1),
-};
-
 struct hal_session {
 	struct list_head list;
 	void *session_id;
 	bool is_decoder;
 	enum hal_video_codec codec;
 	enum hal_domain domain;
-	u32 flags;
 	void *device;
 };
 

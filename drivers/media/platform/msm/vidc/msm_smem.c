@@ -1,4 +1,5 @@
-/* Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
+/*
+ * Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -8,7 +9,6 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
  */
 
 #include <asm/dma-iommu.h>
@@ -20,7 +20,7 @@
 #include <linux/ion_kernel.h>
 #include <linux/slab.h>
 #include <linux/types.h>
-#include "msm_vidc.h"
+#include "media/msm_vidc.h"
 #include "msm_vidc_debug.h"
 #include "msm_vidc_resources.h"
 
@@ -60,8 +60,6 @@ static int msm_dma_get_device_address(struct dma_buf *dbuf, unsigned long align,
 			dprintk(VIDC_ERR,
 				"Size mismatch: Dmabuf size: %zu Expected Size: %lu",
 				dbuf->size, *buffer_size);
-			msm_vidc_res_handle_fatal_hw_error(res,
-					true);
 			goto mem_buf_size_mismatch;
 		}
 
@@ -85,9 +83,11 @@ static int msm_dma_get_device_address(struct dma_buf *dbuf, unsigned long align,
 		 * required buffer size
 		 */
 		attach->dma_map_attrs |= DMA_ATTR_SKIP_CPU_SYNC;
-		if (res->sys_cache_present)
-			attach->dma_map_attrs |=
-				DMA_ATTR_IOMMU_USE_UPSTREAM_HINT;
+		/*
+		 *if (res->sys_cache_present)
+		 *	attach->dma_map_attrs |=
+		 *		DMA_ATTR_IOMMU_USE_UPSTREAM_HINT;
+		 */
 
 		table = dma_buf_map_attachment(attach, DMA_BIDIRECTIONAL);
 		if (IS_ERR_OR_NULL(table)) {
@@ -193,7 +193,26 @@ void msm_smem_put_dma_buf(void *dma_buf)
 
 	return;
 }
+bool msm_smem_compare_buffers(int fd, void *dma_buf)
+{
+	unsigned long dma_plane;
 
+	/*
+	 * always compare dma_buf addresses which is guaranteed
+	 * to be same across the processes (duplicate fds).
+	 */
+	dma_plane = (unsigned long)msm_smem_get_dma_buf(
+		fd);
+	if (!dma_plane)
+		return false;
+	msm_smem_put_dma_buf((struct dma_buf *)dma_plane);
+
+	if ((unsigned long)dma_buf == dma_plane)
+		return true;
+
+	return false;
+
+}
 int msm_smem_map_dma_buf(struct msm_vidc_inst *inst, struct msm_smem *smem)
 {
 	int rc = 0;
@@ -252,7 +271,7 @@ int msm_smem_map_dma_buf(struct msm_vidc_inst *inst, struct msm_smem *smem)
 		goto exit;
 	}
 
-	smem->device_addr = (u32)iova + smem->offset;
+	smem->device_addr = (u32)iova;
 
 	smem->refcount++;
 exit:
@@ -296,7 +315,37 @@ int msm_smem_unmap_dma_buf(struct msm_vidc_inst *inst, struct msm_smem *smem)
 exit:
 	return rc;
 }
+struct msm_smem *msm_smem_user_to_kernel(struct msm_vidc_inst *inst, int fd,
+					u32 offset, u32 size,
+					enum hal_buffer buffer_type)
+{
+	int rc = 0;
+	struct msm_smem *mem;
 
+	if (fd < 0 || !inst) {
+		dprintk(VIDC_ERR, "Invalid fd: %d\n", fd);
+		return NULL;
+	}
+	mem = kzalloc(sizeof(*mem), GFP_KERNEL);
+	if (!mem) {
+		dprintk(VIDC_ERR, "Failed to allocate shared mem\n");
+		return NULL;
+	}
+
+	mem->fd = fd;
+	mem->size = size;
+	mem->buffer_type = buffer_type;
+	mem->offset = offset;
+
+	//rc = ion_user_to_kernel(clt, fd, offset, mem, buffer_type);
+	rc = msm_smem_map_dma_buf(inst, mem);
+	if (rc) {
+		dprintk(VIDC_ERR, "Failed to allocate shared memory\n");
+		kfree(mem);
+		mem = NULL;
+	}
+	return mem;
+}
 static int get_secure_flag_for_buffer_type(
 	u32 session_type, enum hal_buffer buffer_type)
 {
@@ -380,8 +429,15 @@ static int alloc_dma_mem(size_t size, u32 align, u32 flags,
 			goto fail_shared_mem_alloc;
 		}
 
+		if ((secure_flag == ION_FLAG_CP_PIXEL) && res->cma_status)
+			secure_flag = ION_FLAG_CP_CAMERA_ENCODE;
+
 		ion_flags |= ION_FLAG_SECURE | secure_flag;
-		heap_mask = ION_HEAP(ION_SECURE_HEAP_ID);
+		if (res->cma_status) {
+			heap_mask = ION_HEAP(ION_VIDEO_HEAP_ID);
+		} else {
+			heap_mask = ION_HEAP(ION_SECURE_HEAP_ID);
+		}
 
 		if (res->slave_side_cp) {
 			heap_mask = ION_HEAP(ION_CP_MM_HEAP_ID);
@@ -532,7 +588,8 @@ int msm_smem_cache_operations(struct dma_buf *dbuf,
 	/* Return if buffer doesn't support caching */
 	rc = dma_buf_get_flags(dbuf, &flags);
 	if (rc) {
-		dprintk(VIDC_ERR, "%s: dma_buf_get_flags failed, err %d\n", rc);
+		dprintk(VIDC_ERR, "%s: dma_buf_get_flags failed, err %d\n",
+			__func__, rc);
 		return rc;
 	} else if (!(flags & ION_FLAG_CACHED)) {
 		return rc;

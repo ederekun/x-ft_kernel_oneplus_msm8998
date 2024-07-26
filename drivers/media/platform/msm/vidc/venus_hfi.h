@@ -1,4 +1,5 @@
-/* Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
+/*
+ * Copyright (c) 2012-2015, 2018-2019 The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -8,7 +9,6 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
  */
 
 #ifndef __H_VENUS_HFI_H__
@@ -19,6 +19,7 @@
 #include <linux/platform_device.h>
 #include <linux/pm_qos.h>
 #include <linux/spinlock.h>
+#include "vmem/vmem.h"
 #include "vidc_hfi_api.h"
 #include "vidc_hfi_helper.h"
 #include "vidc_hfi_api.h"
@@ -47,9 +48,6 @@
 
 #define VIDC_MAX_NAME_LENGTH 64
 #define VIDC_MAX_PC_SKIP_COUNT 10
-#define VIDC_MAX_SUBCACHES 4
-#define VIDC_MAX_SUBCACHE_SIZE 52
-
 struct hfi_queue_table_header {
 	u32 qtbl_version;
 	u32 qtbl_size;
@@ -57,8 +55,6 @@ struct hfi_queue_table_header {
 	u32 qtbl_qhdr_size;
 	u32 qtbl_num_q;
 	u32 qtbl_num_active_q;
-	void *device_addr;
-	char name[256];
 };
 
 struct hfi_queue_header {
@@ -126,7 +122,7 @@ enum vidc_hw_reg {
 };
 
 struct vidc_mem_addr {
-	u32 align_device_addr;
+	phys_addr_t align_device_addr;
 	u8 *align_virtual_addr;
 	u32 mem_size;
 	struct msm_smem mem_data;
@@ -189,26 +185,12 @@ struct vidc_iface_q_info {
 #define venus_hfi_for_each_clock_reverse(__device, __cinfo) \
 	venus_hfi_for_each_thing_reverse(__device, __cinfo, clock)
 
-#define venus_hfi_for_each_clock_reverse_continue(__device, __rinfo, \
-		__from) \
-	venus_hfi_for_each_thing_reverse_continue(__device, __rinfo, \
-			clock, __from)
-
 /* Bus set helpers */
 #define venus_hfi_for_each_bus(__device, __binfo) \
 	venus_hfi_for_each_thing(__device, __binfo, bus)
 #define venus_hfi_for_each_bus_reverse(__device, __binfo) \
 	venus_hfi_for_each_thing_reverse(__device, __binfo, bus)
 
-/* Subcache set helpers */
-#define venus_hfi_for_each_subcache(__device, __sinfo) \
-	venus_hfi_for_each_thing(__device, __sinfo, subcache)
-#define venus_hfi_for_each_subcache_reverse(__device, __sinfo) \
-	venus_hfi_for_each_thing_reverse(__device, __sinfo, subcache)
-
-#define call_venus_op(d, op, args...)			\
-	(((d) && (d)->vpu_ops && (d)->vpu_ops->op) ? \
-	((d)->vpu_ops->op(args)):0)
 
 /* Internal data used in vidc_hal not exposed to msm_vidc*/
 struct hal_data {
@@ -218,32 +200,21 @@ struct hal_data {
 	u32 register_size;
 };
 
-struct venus_resources {
-	struct msm_vidc_fw fw;
+struct imem {
+	enum imem_type type;
+	union {
+		phys_addr_t vmem;
+	};
 };
 
-enum dsp_flag {
-	DSP_INIT = BIT(0),
-	DSP_SUSPEND = BIT(1),
+struct venus_resources {
+	struct msm_vidc_fw fw;
+	struct imem imem;
 };
 
 enum venus_hfi_state {
 	VENUS_STATE_DEINIT = 1,
 	VENUS_STATE_INIT,
-};
-
-enum reset_state {
-	INIT = 1,
-	ASSERT,
-	DEASSERT,
-};
-
-struct venus_hfi_device;
-
-struct venus_hfi_vpu_ops {
-	void (*interrupt_init)(struct venus_hfi_device *ptr);
-	void (*setup_dsp_uc_memmap)(struct venus_hfi_device *device);
-	void (*clock_config_on_enable)(struct venus_hfi_device *device);
 };
 
 struct venus_hfi_device {
@@ -260,13 +231,10 @@ struct venus_hfi_device {
 	struct mutex lock;
 	msm_vidc_callback callback;
 	struct vidc_mem_addr iface_q_table;
-	struct vidc_mem_addr dsp_iface_q_table;
 	struct vidc_mem_addr qdss;
 	struct vidc_mem_addr sfr;
 	struct vidc_mem_addr mem_addr;
 	struct vidc_iface_q_info iface_queues[VIDC_IFACEQ_NUMQ];
-	struct vidc_iface_q_info dsp_iface_queues[VIDC_IFACEQ_NUMQ];
-	u32 dsp_flags;
 	struct hal_data *hal_data;
 	struct workqueue_struct *vidc_workq;
 	struct workqueue_struct *venus_pm_workq;
@@ -278,11 +246,9 @@ struct venus_hfi_device {
 	struct hfi_packetization_ops *pkt_ops;
 	enum hfi_packetization_type packetization_type;
 	struct msm_vidc_cb_info *response_pkt;
-	u8 *raw_packet;
 	struct pm_qos_request qos;
 	unsigned int skip_pc_count;
 	struct msm_vidc_capability *sys_init_capabilities;
-	struct venus_hfi_vpu_ops *vpu_ops;
 };
 
 void venus_hfi_delete_device(void *device);
