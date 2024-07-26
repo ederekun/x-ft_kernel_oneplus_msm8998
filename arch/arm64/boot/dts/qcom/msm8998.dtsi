@@ -1887,7 +1887,7 @@
 	};
 
 	qusb_phy0: qusb@c012000 {
-		compatible = "qcom,qusb2phy";
+		compatible = "qcom,qusb2phy-v2";
 		reg = <0x0c012000 0x2a8>,
 			<0x01fcb24c 0x4>,
 			<0x00188014 0x4>;
@@ -1910,7 +1910,6 @@
 					0x00 0x240>;
 		phy_type= "utmi";
 		qcom,phy-clk-scheme = "cml";
-		qcom,major-rev = <2>;
 
 		clocks = <&clock_rpmcc RPM_SMD_LN_BB_CLK1>,
 			<&clock_gcc GCC_RX1_USB2_CLKREF_CLK>,
