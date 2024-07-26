@@ -1,4 +1,6 @@
-/* Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
+/*
+ * Copyright (c) 2012-2015, 2017-2019, The Linux Foundation.
+ * All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -8,7 +10,6 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
  */
 
 #ifndef __MSM_VIDC_DEBUG__
@@ -16,21 +17,14 @@
 #include <linux/debugfs.h>
 #include <linux/delay.h>
 #include "msm_vidc_internal.h"
-#include "trace/events/msm_vidc_events.h"
+#include "trace/events/msm_vidc.h"
 
 #ifndef VIDC_DBG_LABEL
 #define VIDC_DBG_LABEL "msm_vidc"
 #endif
 
-/*
- * This enforces a rate limit: not more than 6 messages
- * in every 1s.
- */
-
-#define VIDC_DBG_SESSION_RATELIMIT_INTERVAL (1 * HZ)
-#define VIDC_DBG_SESSION_RATELIMIT_BURST 6
-
 #define VIDC_DBG_TAG VIDC_DBG_LABEL ": %4s: "
+#define VIDC_DBG_WARN_ENABLE (msm_vidc_debug & VIDC_INFO)
 
 /* To enable messages OR these values and
  * echo the result to debugfs file.
@@ -50,6 +44,7 @@ enum vidc_msg_prio {
 
 enum vidc_msg_out {
 	VIDC_OUT_PRINTK = 0,
+	VIDC_OUT_FTRACE,
 };
 
 enum msm_vidc_debugfs_event {
@@ -64,40 +59,60 @@ extern int msm_vidc_debug_out;
 extern int msm_vidc_fw_debug;
 extern int msm_vidc_fw_debug_mode;
 extern int msm_vidc_fw_low_power_mode;
+extern int msm_vidc_hw_rsp_timeout;
 extern bool msm_vidc_fw_coverage;
+extern int msm_vidc_vpe_csc_601_to_709;
+extern bool msm_vidc_dec_dcvs_mode;
+extern bool msm_vidc_enc_dcvs_mode;
+extern bool msm_vidc_sys_idle_indicator;
+extern int msm_vidc_firmware_unload_delay;
 extern bool msm_vidc_thermal_mitigation_disabled;
-extern int msm_vidc_clock_voting;
-extern bool msm_vidc_syscache_disable;
+extern bool msm_vidc_bitrate_clock_scaling;
+extern bool msm_vidc_debug_timeout;
+
+static inline char *VIDC_MSG_PRIO2STRING(int __level)
+{
+	char *__str;
+
+	switch (__level) {
+	case VIDC_ERR:
+		__str = "err";
+		break;
+	case VIDC_WARN:
+		__str = "warn";
+		break;
+	case VIDC_INFO:
+		__str = "info";
+		break;
+	case VIDC_DBG:
+		__str = "dbg";
+		break;
+	case VIDC_PROF:
+		__str = "prof";
+		break;
+	case VIDC_PKT:
+		__str = "pkt";
+		break;
+	case VIDC_FW:
+		__str = "fw";
+		break;
+	default:
+		__str = "????";
+		break;
+	}
+	return __str;
+}
 
 #define dprintk(__level, __fmt, arg...)	\
 	do { \
 		if (msm_vidc_debug & __level) { \
 			if (msm_vidc_debug_out == VIDC_OUT_PRINTK) { \
 				pr_info(VIDC_DBG_TAG __fmt, \
-					get_debug_level_str(__level),	\
-					## arg); \
+						VIDC_MSG_PRIO2STRING(__level), \
+						## arg); \
 			} \
 		} \
-	} while (0)
-
-#define dprintk_ratelimit(__level, __fmt, arg...) \
-	do { \
-		if (msm_vidc_debug & __level) { \
-			if (msm_vidc_debug_out == VIDC_OUT_PRINTK && \
-					msm_vidc_check_ratelimit()) { \
-				pr_info(VIDC_DBG_TAG __fmt, \
-					get_debug_level_str(__level),	\
-					## arg); \
-			} \
-		} \
-	} while (0)
-
-#define MSM_VIDC_ERROR(value)					\
-	do {	if (value)					\
-			dprintk(VIDC_DBG, "BugOn");		\
-		BUG_ON(value);					\
-	} while (0)
-
+} while (0)
 
 struct dentry *msm_vidc_debugfs_init_drv(void);
 struct dentry *msm_vidc_debugfs_init_core(struct msm_vidc_core *core,
@@ -107,29 +122,6 @@ struct dentry *msm_vidc_debugfs_init_inst(struct msm_vidc_inst *inst,
 void msm_vidc_debugfs_deinit_inst(struct msm_vidc_inst *inst);
 void msm_vidc_debugfs_update(struct msm_vidc_inst *inst,
 		enum msm_vidc_debugfs_event e);
-int msm_vidc_check_ratelimit(void);
-
-static inline char *get_debug_level_str(int level)
-{
-	switch (level) {
-	case VIDC_ERR:
-		return "err";
-	case VIDC_WARN:
-		return "warn";
-	case VIDC_INFO:
-		return "info";
-	case VIDC_DBG:
-		return "dbg";
-	case VIDC_PROF:
-		return "prof";
-	case VIDC_PKT:
-		return "pkt";
-	case VIDC_FW:
-		return "fw";
-	default:
-		return "???";
-	}
-}
 
 static inline void tic(struct msm_vidc_inst *i, enum profiling_points p,
 				 char *b)
@@ -181,36 +173,6 @@ static inline void show_stats(struct msm_vidc_inst *i)
 					i->debug.samples);
 		}
 	}
-}
-
-static inline void msm_vidc_res_handle_fatal_hw_error(
-	struct msm_vidc_platform_resources *resources,
-	bool enable_fatal)
-{
-	enable_fatal &= resources->debug_timeout;
-	MSM_VIDC_ERROR(enable_fatal);
-}
-
-static inline void msm_vidc_handle_hw_error(struct msm_vidc_core *core)
-{
-	bool enable_fatal = true;
-
-	/*
-	 * In current implementation user-initiated SSR triggers
-	 * a fatal error from hardware. However, there is no way
-	 * to know if fatal error is due to SSR or not. Handle
-	 * user SSR as non-fatal.
-	 */
-	if (core->trigger_ssr) {
-		core->trigger_ssr = false;
-		enable_fatal = false;
-	}
-
-	/* Video driver can decide FATAL handling of HW errors
-	 * based on multiple factors. This condition check will
-	 * be enhanced later.
-	 */
-	msm_vidc_res_handle_fatal_hw_error(&core->resources, enable_fatal);
 }
 
 #endif

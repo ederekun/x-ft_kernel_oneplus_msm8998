@@ -1,9 +1,5 @@
 ccflags-y := -I$(srctree)/drivers/devfreq/ \
-	-I$(srctree)/drivers/media/platform/msm/vidc/ \
-        -I$(srctree)/drivers/media/platform/msm/vidc/governors/
+	-I$(srctree)/drivers/media/platform/msm/vidc_3x/
 
-msm-vidc-dyn-gov-objs := msm_vidc_dyn_gov.o
-
-msm-vidc-ar50-dyn-gov-objs := msm_vidc_ar50_dyn_gov.o
-
-obj-$(CONFIG_MSM_VIDC_GOVERNORS) := msm-vidc-dyn-gov.o msm-vidc-ar50-dyn-gov.o
+obj-$(CONFIG_MSM_VIDC_3X_GOVERNORS) := msm_vidc_dyn_gov.o \
+	msm_vidc_table_gov.o
