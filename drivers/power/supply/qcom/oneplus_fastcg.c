@@ -670,7 +670,11 @@ static void update_fireware_version_func(struct work_struct *work)
 }
 
 /* 15 secs */
-#define WATCHDOG_INTERVAL 15000 
+#define WATCHDOG_INTERVAL 15000
+
+#define WATCHDOG_MAX_CNT 10
+static unsigned int watchdog_cnt = 0;
+
 static void di_mcu_wdg(struct work_struct *work)
 {
 	struct fastchg_device_info *di = container_of(work,
@@ -688,6 +692,14 @@ static void di_mcu_wdg(struct work_struct *work)
 
 	switch_mode_to_normal();
 	msleep(500);
+
+	if (watchdog_cnt >= WATCHDOG_MAX_CNT) {
+		pr_warn("max dash watchdog retries reached! "
+			"retain normal charging\n");
+		watchdog_cnt = 0;
+		return;
+	}
+	watchdog_cnt++;
 
 	/* 
 	 * Reset MCU GPIO and request dash IRQ again after 
@@ -941,6 +953,7 @@ static long  dash_dev_ioctl(struct file *filp, unsigned int cmd,
 				pr_err("fastchg stop unexpectly, switch off fastchg\n");
 				switch_mode_to_normal();
 				del_timer(&di->watchdog);
+				watchdog_cnt = 0;
 				dash_write(di, REJECT_DATA);
 			} else if (arg == DASH_NOTIFY_FAST_ABSENT + 2) {
 				notify_check_usb_suspend(true, true);
@@ -983,6 +996,7 @@ static long  dash_dev_ioctl(struct file *filp, unsigned int cmd,
 				pr_err("fastchg full, switch off fastchg, set usb_sw_gpio 0\n");
 				switch_mode_to_normal();
 				del_timer(&di->watchdog);
+				watchdog_cnt = 0;
 			} else if (arg == DASH_NOTIFY_NORMAL_TEMP_FULL + 2) {
 				di->fast_switch_to_normal = true;
 				bq27541_data->set_allow_reading(true);
@@ -999,6 +1013,7 @@ static long  dash_dev_ioctl(struct file *filp, unsigned int cmd,
 				pr_err("fastchg temp over\n");
 				switch_mode_to_normal();
 				del_timer(&di->watchdog);
+				watchdog_cnt = 0;
 			} else if (arg == DASH_NOTIFY_TEMP_OVER + 2) {
 				di->fast_normal_to_warm = true;
 				bq27541_data->set_allow_reading(true);
@@ -1052,6 +1067,7 @@ static long  dash_dev_ioctl(struct file *filp, unsigned int cmd,
 				pr_err("DASH_NOTIFY_INVALID_DATA_CMD, switch off fastchg\n");
 				switch_mode_to_normal();
 				del_timer(&di->watchdog);
+				watchdog_cnt = 0;
 				__pm_relax(&di->fastchg_wake_lock);
 				notify_check_usb_suspend(true, true);
 				oneplus_notify_pmic_check_charger_present();
