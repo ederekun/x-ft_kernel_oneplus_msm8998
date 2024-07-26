@@ -114,6 +114,8 @@
 
 #define QUSB2PHY_REFCLK_ENABLE		BIT(0)
 
+#define QUSB2PHY_PLL_ANALOG_CONTROLS_ONE	0x0
+
 static unsigned int tune1;
 module_param(tune1, uint, 0644);
 MODULE_PARM_DESC(tune1, "QUSB PHY TUNE1");
@@ -133,10 +135,6 @@ MODULE_PARM_DESC(tune4, "QUSB PHY TUNE4");
 static unsigned int tune5;
 module_param(tune5, uint, 0644);
 MODULE_PARM_DESC(tune5, "QUSB PHY TUNE5");
-
-static bool eud_connected;
-module_param(eud_connected, bool, 0644);
-MODULE_PARM_DESC(eud_connected, "EUD_CONNECTED");
 
 struct qusb_phy {
 	struct usb_phy		phy;
@@ -553,9 +551,9 @@ static int qusb_phy_init(struct usb_phy *phy)
 		writel_relaxed(CLAMP_N_EN | FREEZIO_N | POWER_DOWN,
 				qphy->base + QUSB2PHY_PORT_POWERDOWN);
 	else
-		writel_relaxed(readl_relaxed(qphy->base + QUSB2PHY_PWR_CTRL1) |
-				PWR_CTRL1_POWR_DOWN,
-				qphy->base + QUSB2PHY_PWR_CTRL1);
+	writel_relaxed(readl_relaxed(qphy->base + QUSB2PHY_PWR_CTRL1) |
+			PWR_CTRL1_POWR_DOWN,
+			qphy->base + QUSB2PHY_PWR_CTRL1);
 
 	/* configure for ULPI mode if requested */
 	if (qphy->ulpi_mode)
@@ -616,9 +614,9 @@ static int qusb_phy_init(struct usb_phy *phy)
 		writel_relaxed(CLAMP_N_EN | FREEZIO_N,
 				qphy->base + QUSB2PHY_PORT_POWERDOWN);
 	else
-		writel_relaxed(readl_relaxed(qphy->base + QUSB2PHY_PWR_CTRL1) &
-				~PWR_CTRL1_POWR_DOWN,
-				qphy->base + QUSB2PHY_PWR_CTRL1);
+	writel_relaxed(readl_relaxed(qphy->base + QUSB2PHY_PWR_CTRL1) &
+			~PWR_CTRL1_POWR_DOWN,
+			qphy->base + QUSB2PHY_PWR_CTRL1);
 
 	/* Ensure above write is completed before turning ON ref clk */
 	wmb();
@@ -679,9 +677,9 @@ static void qusb_phy_shutdown(struct usb_phy *phy)
 		writel_relaxed(CLAMP_N_EN | FREEZIO_N | POWER_DOWN,
 				qphy->base + QUSB2PHY_PORT_POWERDOWN);
 	else
-		writel_relaxed(readl_relaxed(qphy->base + QUSB2PHY_PWR_CTRL1) |
-				PWR_CTRL1_POWR_DOWN,
-				qphy->base + QUSB2PHY_PWR_CTRL1);
+	writel_relaxed(readl_relaxed(qphy->base + QUSB2PHY_PWR_CTRL1) |
+			PWR_CTRL1_POWR_DOWN,
+			qphy->base + QUSB2PHY_PWR_CTRL1);
 
 	/* Make sure above write complete before turning off clocks */
 	wmb();
@@ -699,6 +697,7 @@ static int qusb_phy_set_suspend(struct usb_phy *phy, int suspend)
 {
 	struct qusb_phy *qphy = container_of(phy, struct qusb_phy, phy);
 	u32 linestate = 0, intr_mask = 0;
+	int ret = 0;
 
 	if (qphy->suspended == suspend) {
 		dev_dbg(phy->dev, "%s: USB PHY is already suspended\n",
@@ -710,6 +709,11 @@ static int qusb_phy_set_suspend(struct usb_phy *phy, int suspend)
 		/* Bus suspend case */
 		if (qphy->cable_connected ||
 			(qphy->phy.flags & PHY_HOST_MODE)) {
+
+			/* enable clock bypass */
+			writel_relaxed(0x90,
+				qphy->base + QUSB2PHY_PLL_ANALOG_CONTROLS_ONE);
+
 			/* Clear all interrupts */
 			writel_relaxed(0x00,
 				qphy->base + QUSB2PHY_PORT_INTR_CTRL);
@@ -755,23 +759,28 @@ static int qusb_phy_set_suspend(struct usb_phy *phy, int suspend)
 			qusb_phy_enable_clocks(qphy, false);
 		} else { /* Disconnect case */
 			mutex_lock(&qphy->phy_lock);
-			/* Disable all interrupts */
-			writel_relaxed(0x00,
-				qphy->base + QUSB2PHY_PORT_INTR_CTRL);
 
-			if (!eud_connected) {
-				/* Disable PHY */
-				writel_relaxed(POWER_DOWN |
-					readl_relaxed(qphy->base +
-						QUSB2PHY_PORT_POWERDOWN),
-					qphy->base + QUSB2PHY_PORT_POWERDOWN);
-				/* Make sure that above write is completed */
-				wmb();
+			ret = reset_control_assert(qphy->phy_reset);
+			if (ret)
+				dev_err(qphy->phy.dev, "phyassert failed\n");
+			usleep_range(100, 150);
+			ret = reset_control_deassert(qphy->phy_reset);
+			if (ret)
+				dev_err(qphy->phy.dev, "deassert failed\n");
 
-				if (qphy->tcsr_clamp_dig_n)
-					writel_relaxed(0x0,
-						qphy->tcsr_clamp_dig_n);
-			}
+			/* enable clock bypass */
+			writel_relaxed(0x90,
+				qphy->base + QUSB2PHY_PLL_ANALOG_CONTROLS_ONE);
+
+			if (qphy->tcsr_clamp_dig_n)
+				writel_relaxed(0x0,
+					qphy->tcsr_clamp_dig_n);
+
+			/*
+			 * clamp needs asserted before
+			 * power/clocks can be turned off
+			 */
+			wmb();
 
 			qusb_phy_enable_clocks(qphy, false);
 			/* Do not disable power rails if there is vote for it */
@@ -796,14 +805,30 @@ static int qusb_phy_set_suspend(struct usb_phy *phy, int suspend)
 		if (qphy->cable_connected ||
 			(qphy->phy.flags & PHY_HOST_MODE)) {
 			qusb_phy_enable_clocks(qphy, true);
+
+			/* disable clock bypass */
+			writel_relaxed(0x80,
+				qphy->base + QUSB2PHY_PLL_ANALOG_CONTROLS_ONE);
+
 			/* Clear all interrupts on resume */
 			writel_relaxed(0x00,
 				qphy->base + QUSB2PHY_PORT_INTR_CTRL);
 		} else {
-			qusb_phy_enable_power(qphy, true);
 			if (qphy->tcsr_clamp_dig_n)
 				writel_relaxed(0x1,
 					qphy->tcsr_clamp_dig_n);
+
+			/*
+			 * clamp needs de-asserted before
+			 * power/clocks can be turned on
+			 */
+			wmb();
+
+			ret = reset_control_deassert(qphy->phy_reset);
+			if (ret)
+				dev_err(qphy->phy.dev, "deassert failed\n");
+
+			qusb_phy_enable_power(qphy, true);
 			qusb_phy_enable_clocks(qphy, true);
 		}
 		qphy->suspended = false;
