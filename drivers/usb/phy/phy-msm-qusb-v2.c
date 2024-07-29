@@ -116,6 +116,10 @@ struct qusb_phy {
 	bool			cable_connected;
 	bool			suspended;
 	bool			is_se_clk;
+	bool			rm_pulldown;
+
+	struct regulator_desc	dpdm_rdesc;
+	struct regulator_dev	*dpdm_rdev;
 
 	/* emulation targets specific */
 	void __iomem		*emu_phy_base;
@@ -749,6 +753,106 @@ static int qusb_phy_notify_disconnect(struct usb_phy *phy,
 	return 0;
 }
 
+static int qusb_phy_update_dpdm(struct usb_phy *phy, int value)
+{
+	struct qusb_phy *qphy = container_of(phy, struct qusb_phy, phy);
+	int ret = 0;
+
+	dev_dbg(phy->dev, "%s value:%d rm_pulldown:%d\n",
+				__func__, value, qphy->rm_pulldown);
+
+	switch (value) {
+	case POWER_SUPPLY_DP_DM_DPF_DMF:
+		dev_dbg(phy->dev, "POWER_SUPPLY_DP_DM_DPF_DMF\n");
+		if (!qphy->rm_pulldown) {
+			ret = qusb_phy_enable_power(qphy, true);
+			if (ret >= 0) {
+				qphy->rm_pulldown = true;
+				dev_dbg(phy->dev, "DP_DM_F: rm_pulldown:%d\n",
+						qphy->rm_pulldown);
+			}
+		}
+		break;
+
+	case POWER_SUPPLY_DP_DM_DPR_DMR:
+		dev_dbg(phy->dev, "POWER_SUPPLY_DP_DM_DPR_DMR\n");
+		if (qphy->rm_pulldown) {
+			ret = qusb_phy_enable_power(qphy, false);
+			if (ret >= 0) {
+				qphy->rm_pulldown = false;
+				dev_dbg(phy->dev, "DP_DM_R: rm_pulldown:%d\n",
+						qphy->rm_pulldown);
+			}
+		}
+		break;
+
+	default:
+		ret = -EINVAL;
+		dev_err(phy->dev, "Invalid power supply property(%d)\n", value);
+		break;
+	}
+
+	return ret;
+}
+
+static int qusb_phy_dpdm_regulator_enable(struct regulator_dev *rdev)
+{
+	struct qusb_phy *qphy = rdev_get_drvdata(rdev);
+
+	dev_dbg(qphy->phy.dev, "%s\n", __func__);
+	return qusb_phy_update_dpdm(&qphy->phy, POWER_SUPPLY_DP_DM_DPF_DMF);
+}
+
+static int qusb_phy_dpdm_regulator_disable(struct regulator_dev *rdev)
+{
+	struct qusb_phy *qphy = rdev_get_drvdata(rdev);
+
+	dev_dbg(qphy->phy.dev, "%s\n", __func__);
+	return qusb_phy_update_dpdm(&qphy->phy, POWER_SUPPLY_DP_DM_DPR_DMR);
+}
+
+static int qusb_phy_dpdm_regulator_is_enabled(struct regulator_dev *rdev)
+{
+	struct qusb_phy *qphy = rdev_get_drvdata(rdev);
+
+	dev_dbg(qphy->phy.dev, "%s qphy->rm_pulldown = %d\n", __func__,
+					qphy->rm_pulldown);
+	return qphy->rm_pulldown;
+}
+
+static struct regulator_ops qusb_phy_dpdm_regulator_ops = {
+	.enable		= qusb_phy_dpdm_regulator_enable,
+	.disable	= qusb_phy_dpdm_regulator_disable,
+	.is_enabled	= qusb_phy_dpdm_regulator_is_enabled,
+};
+
+static int qusb_phy_regulator_init(struct qusb_phy *qphy)
+{
+	struct device *dev = qphy->phy.dev;
+	struct regulator_config cfg = {};
+	struct regulator_init_data *init_data;
+
+	init_data = devm_kzalloc(dev, sizeof(*init_data), GFP_KERNEL);
+	if (!init_data)
+		return -ENOMEM;
+
+	init_data->constraints.valid_ops_mask |= REGULATOR_CHANGE_STATUS;
+	qphy->dpdm_rdesc.owner = THIS_MODULE;
+	qphy->dpdm_rdesc.type = REGULATOR_VOLTAGE;
+	qphy->dpdm_rdesc.ops = &qusb_phy_dpdm_regulator_ops;
+	qphy->dpdm_rdesc.name = kbasename(dev->of_node->full_name);
+
+	cfg.dev = dev;
+	cfg.init_data = init_data;
+	cfg.driver_data = qphy;
+	cfg.of_node = dev->of_node;
+
+	qphy->dpdm_rdev = devm_regulator_register(dev, &qphy->dpdm_rdesc, &cfg);
+	if (IS_ERR(qphy->dpdm_rdev))
+		return PTR_ERR(qphy->dpdm_rdev);
+
+	return 0;
+}
 
 static int qusb_phy_probe(struct platform_device *pdev)
 {
@@ -1030,6 +1134,10 @@ static int qusb_phy_probe(struct platform_device *pdev)
 	ret = usb_add_phy_dev(&qphy->phy);
 	if (ret)
 		return ret;
+
+	ret = qusb_phy_regulator_init(qphy);
+	if (ret)
+		usb_remove_phy(&qphy->phy);
 
 	/* de-assert clamp dig n to reduce leakage on 1p8 upon boot up */
 	if (qphy->tcsr_clamp_dig_n)
