@@ -5268,7 +5268,7 @@ static void op_handle_usb_removal(struct smb_charger *chg)
 
 int update_dash_unplug_status(void)
 {
-	int rc;
+	int rc, status;
 	union power_supply_propval vbus_val;
 
 	rc = smblib_get_prop_usb_voltage_now(g_chg, &vbus_val);
@@ -5278,6 +5278,12 @@ int update_dash_unplug_status(void)
 		op_handle_usb_plugin(g_chg);
 		smblib_update_usb_type(g_chg);
 		power_supply_changed(g_chg->usb_psy);
+	}
+
+	status = get_charging_status();
+	if (status == POWER_SUPPLY_STATUS_NOT_CHARGING) {
+		pr_warn("dash not charging, fully switch to normal");
+		set_dash_charger_present(false);
 	}
 
 	return 0;
