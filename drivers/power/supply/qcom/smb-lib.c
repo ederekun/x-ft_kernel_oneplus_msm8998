@@ -5266,10 +5266,36 @@ static void op_handle_usb_removal(struct smb_charger *chg)
 	op_battery_temp_region_set(chg, BATT_TEMP_INVALID);
 }
 
+#define CHECK_STATUS_DELAY 2000 /* 2s */
+static void check_dash_status(struct work_struct *work)
+{
+	int status;
+
+	status = get_charging_status();
+	if (status == POWER_SUPPLY_STATUS_CHARGING)
+		return;
+
+	pr_warn("not charging, will disable dash after 2s");
+
+	/* Ensure the charger has transitioned before checking again */
+	msleep(CHECK_STATUS_DELAY);
+
+	status = get_charging_status();
+	if (status == POWER_SUPPLY_STATUS_NOT_CHARGING) {
+		pr_warn("still not charging, fully switch to normal");
+		set_dash_charger_present(false);
+	} else {
+		pr_info("charging, dash will continue to be present");
+	}
+}
+DECLARE_WORK(check_dash_status_work, check_dash_status);
+
 int update_dash_unplug_status(void)
 {
-	int rc, status;
+	int rc;
 	union power_supply_propval vbus_val;
+
+	schedule_work(&check_dash_status_work);
 
 	rc = smblib_get_prop_usb_voltage_now(g_chg, &vbus_val);
 	if (rc < 0)
@@ -5278,12 +5304,6 @@ int update_dash_unplug_status(void)
 		op_handle_usb_plugin(g_chg);
 		smblib_update_usb_type(g_chg);
 		power_supply_changed(g_chg->usb_psy);
-	}
-
-	status = get_charging_status();
-	if (status == POWER_SUPPLY_STATUS_NOT_CHARGING) {
-		pr_warn("dash not charging, fully switch to normal");
-		set_dash_charger_present(false);
 	}
 
 	return 0;
