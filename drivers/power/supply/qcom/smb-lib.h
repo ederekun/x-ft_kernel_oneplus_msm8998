@@ -570,6 +570,9 @@ int smblib_set_prop_chg_voltage(struct smb_charger *chg,
 				const union power_supply_propval *val);
 int smblib_set_prop_batt_temp(struct smb_charger *chg,
 				const union power_supply_propval *val);
+int op_charging_en(struct smb_charger *chg, bool en);
+int op_check_battery_temp(struct smb_charger *chg);
+int op_get_apsd_bit(struct smb_charger *chg);
 bool op_get_fastchg_ing(struct smb_charger *chg);
 bool get_prop_fastchg_status(struct smb_charger *chg);
 int op_usb_icl_set(struct smb_charger *chg, int icl_ua);
