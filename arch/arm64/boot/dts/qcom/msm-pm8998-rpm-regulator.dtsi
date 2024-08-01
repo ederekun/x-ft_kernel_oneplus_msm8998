@@ -10,7 +10,7 @@
  * GNU General Public License for more details.
  */
 
-&rpm_bus {
+&soc {
 	/* PM8998 S1 + S6 = VDD_CX supply */
 	rpm-regulator-smpa1 {
 		compatible = "qcom,rpm-smd-regulator-resource";
