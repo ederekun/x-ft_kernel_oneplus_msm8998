@@ -946,7 +946,7 @@
 		cam_vaf-supply = <&pm8998_l22>;
 		cam_v_custom1-supply = <&pm8998_s3>;
 		qcom,cam-vreg-name = "cam_vio",
-		"cam_vana", "cam_vaf", "cam_vdig";
+		"cam_vana", "cam_vaf", "cam_v_custom1";
 		qcom,cam-vreg-min-voltage = <0 3312000 2864000 1352000>;
 		qcom,cam-vreg-max-voltage = <0 3600000 2864000 1352000>;
 		qcom,cam-vreg-op-mode = <0 3600000 2864000 1352000>;
@@ -1001,7 +1001,7 @@
 		cam_vaf-supply = <&pmi8998_bob>;
 		cam_v_custom1-supply = <&pm8998_s3>;
 		qcom,cam-vreg-name = "cam_vio",
-		"cam_vana", "cam_vaf", "cam_vdig";
+		"cam_vana", "cam_vaf", "cam_v_custom1";
 		qcom,cam-vreg-min-voltage = <0 3312000 3312000 1352000>;
 		qcom,cam-vreg-max-voltage = <0 3600000 3600000 1352000>;
 		qcom,cam-vreg-op-mode = <0 3600000 3600000 1352000>;
