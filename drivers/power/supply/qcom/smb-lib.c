@@ -6730,7 +6730,9 @@ static void op_heartbeat_work(struct work_struct *work)
 	}
 
 	charger_present = is_usb_present(chg);
-	op_cg_uovp_enable(chg, charger_present);
+
+	if (!disable_voltage_check)
+		op_cg_uovp_enable(chg, charger_present);
 
 	if (!charger_present)
 		goto out;
@@ -6759,9 +6761,8 @@ static void op_heartbeat_work(struct work_struct *work)
 							msecs_to_jiffies(100));
 	}
 
-	if (!disable_voltage_check) {
+	if (!disable_voltage_check)
 		op_check_charger_uovp(chg, vbus_val.intval);
-	}
 	op_check_battery_uovp(chg);
 	if (vbus_val.intval > 4500)
 		op_check_charger_collapse(chg);
@@ -7774,9 +7775,14 @@ static ssize_t disable_voltage_check_store(struct device *dev, struct device_att
 
 	disable_voltage_check = value;
 
-	if (disable_voltage_check && g_chg->chg_ovp) {
+	if (!is_usb_present(g_chg))
+		return count;
+
+	op_cg_uovp_enable(g_chg, !value);
+
+	if (!g_chg->dash_on) {
+		op_charging_en(g_chg, false);
 		op_charging_en(g_chg, true);
-		g_chg->chg_ovp = false;
 		op_check_battery_temp(g_chg);
 		smblib_rerun_aicl(g_chg);
 	}
