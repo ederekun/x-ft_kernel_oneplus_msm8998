@@ -825,6 +825,7 @@ static struct clk_fixed_factor sys_apcsaux_clk_gcc = {
 		.name = "sys_apcsaux_clk_gcc",
 		.parent_names = (const char *[]){ "hmss_gpll0_clk_src" },
 		.num_parents = 1,
+		.flags = CLK_SET_RATE_PARENT,
 		.ops = &clk_fixed_factor_ops,
 	},
 };

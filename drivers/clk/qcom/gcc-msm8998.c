@@ -3288,9 +3288,6 @@ static int gcc_msm8998_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	/* Set the HMSS_GPLL0_SRC for 300MHz to CPU subsystem */
-	clk_set_rate(hmss_gpll0_clk_src.clkr.hw.clk, 300000000);
-
 	clk_set_flags(gcc_gpu_bimc_gfx_clk.clkr.hw.clk, CLKFLAG_RETAIN_MEM);
 
 	/* Set FSM Mode on GPLL clocks (write to PLL_MODE register) */
