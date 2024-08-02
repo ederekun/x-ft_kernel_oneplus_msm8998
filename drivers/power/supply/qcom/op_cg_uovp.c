@@ -9,6 +9,7 @@
  */
 #define pr_fmt(fmt) "SMBLIB: %s: " fmt, __func__
 
+#include <linux/pmic-voter.h>
 #include <linux/power_supply.h>
 #include <linux/slab.h>
 #include "smb-reg.h"
@@ -22,11 +23,12 @@
 
 #define DETECT_CNT             3
 
-#define NO_CHARGER_BIT         0
+#define FAST_CHARGER_BITS \
+	(DCP_CHARGER_BIT | FLOAT_CHARGER_BIT | OCP_CHARGER_BIT)
 
 struct op_cg_current_table {
-	int apsd_bit;
 	int max_ichg_ua;
+	int apsd_bit;
 };
 
 struct op_cg_uovp_data {
@@ -39,21 +41,28 @@ struct op_cg_uovp_data {
 	int current_ua;
 	int no_uovp_current_ua;
 
+	int apsd_bit;
+
 	bool last_uovp_state;
 	bool uovp_state;
 	bool is_overvolt;
 	bool lock_current;
+	bool config_en;
+
+	bool initialized;
 	bool enable;
 };
 
-/* Table of apsd bits with their corresponding max current uA */
+/* Table of max currents uA with their supported apsd bit */
 static const struct op_cg_current_table op_cg_current_data[] = {
-	{ SDP_CHARGER_BIT, 		CURRENT_FLOOR_UA 	},
- 	{ NO_CHARGER_BIT, 		900000 				},
- 	{ CDP_CHARGER_BIT, 		1500000 			},
-	{ DCP_CHARGER_BIT | 
-	  FLOAT_CHARGER_BIT | 
-	  OCP_CHARGER_BIT, 		3000000 			},
+	{ CURRENT_FLOOR_UA, SDP_CHARGER_BIT   },
+	{ 750000, },
+	{ 1000000, },
+	{ 1250000, },
+	{ 1500000,          CDP_CHARGER_BIT   },
+	{ 2000000, },
+	{ 2500000, },
+	{ 3000000,          FAST_CHARGER_BITS },
 };
 
 static struct op_cg_uovp_data op_uovp_data;
@@ -92,10 +101,48 @@ static int op_cg_current_set(struct op_cg_uovp_data *opdata,
 
 	pr_info("voting ichg_ua=%d", ichg_ua);
 
-	ret = smblib_set_icl_current(chg, ichg_ua);
-	if (ret)
+	ret = vote(chg->usb_icl_votable, USB_PSY_VOTER,
+					true, ichg_ua);
+	if (ret) {
 		pr_err("can't set charger max current, ret=%d", ret);
+		goto err;
+	}
 
+	power_supply_changed(chg->usb_psy);
+err:
+	return ret;
+}
+
+static int op_cg_configure_uvp(struct op_cg_uovp_data *opdata,
+				bool enable)
+{
+	struct smb_charger *chg = opdata->chg;
+	int ret = 0;
+
+	if (opdata->config_en == enable)
+		return ret;
+
+	/* Don't configure for SDP */
+	ret = opdata->apsd_bit & SDP_CHARGER_BIT;
+	if (ret)
+		return ret;
+
+	pr_info("UVP config, en=%d", enable);
+
+	/* Disable USB suspend on collapse */
+	ret = smblib_masked_write(chg, USBIN_AICL_OPTIONS_CFG_REG,
+			SUSPEND_ON_COLLAPSE_USBIN_BIT,
+			enable ? 0 : SUSPEND_ON_COLLAPSE_USBIN_BIT);
+	if (ret < 0) {
+		pr_err("Couldn't set SUSPEND_ON_COLLAPSE_USBIN_BIT rc=%d\n", 
+				ret);
+		goto err;
+	}
+	pr_info("Set SUSPEND_ON_COLLAPSE_USBIN_BIT to en=%d", !enable);
+
+	smblib_rerun_aicl(chg);
+	opdata->config_en = enable;
+err:
 	return ret;
 }
 
@@ -103,41 +150,38 @@ static int op_cg_current_inc_dec(struct op_cg_uovp_data *opdata,
 				bool increase)
 {
 	struct smb_charger *chg = opdata->chg;
+	int ceil_ichg_ua = CURRENT_CEIL_DEFAULT;
 	int ichg_ua, i, ret = 0;
 
-	ret = smblib_get_icl_current(chg, &ichg_ua);
-	if (ret) {
-		pr_err("can't get charger max current, ret=%d", ret);
-		goto err;
-	}
+	ichg_ua = get_effective_result(chg->usb_icl_votable);
 
 	pr_info("smblib_ichg_ua=%d", ichg_ua);
 	opdata->current_ua = ichg_ua;
 
+	for (i = 0; i < ARRAY_SIZE(op_cg_current_data); i++) {
+		const struct op_cg_current_table *d = &op_cg_current_data[i];
+
+		if (opdata->apsd_bit & d->apsd_bit)
+			ceil_ichg_ua = d->max_ichg_ua;
+	}
+
 	if (increase) {
-		int apsd_bit = op_get_apsd_bit(chg);
-		int ceil_ichg_ua = CURRENT_CEIL_DEFAULT;
-		bool ichg_ua_set = false;
+		if (ichg_ua == ceil_ichg_ua && opdata->not_uovp_cnt >= DETECT_CNT) {
+			opdata->lock_current = true;
+			if (!opdata->no_uovp_current_ua)
+				opdata->no_uovp_current_ua = ichg_ua;
+			pr_info("max current has been reached - locked ichg_ua=%d", 
+					opdata->no_uovp_current_ua);
+			goto err;
+		}
 
 		for (i = 0; i < ARRAY_SIZE(op_cg_current_data); i++) {
 			const struct op_cg_current_table *d = &op_cg_current_data[i];
 
-			if (apsd_bit & d->apsd_bit)
-				ceil_ichg_ua = d->max_ichg_ua;
-
-			if (ichg_ua_set)
-				continue;
-
 			if (d->max_ichg_ua > ichg_ua) {
 				ichg_ua = d->max_ichg_ua;
-				ichg_ua_set = true;
+				break;
 			}
-		}
-		ichg_ua = min(ichg_ua, ceil_ichg_ua);
-		if (ichg_ua == ceil_ichg_ua && opdata->not_uovp_cnt >= DETECT_CNT) {
-			opdata->lock_current = true;
-			pr_info("max current has been reached - locked ichg_ua=%d", 
-					opdata->no_uovp_current_ua);
 		}
 	} else {
 		for (i = ARRAY_SIZE(op_cg_current_data) - 1; i >= 0; i--) {
@@ -148,8 +192,9 @@ static int op_cg_current_inc_dec(struct op_cg_uovp_data *opdata,
 				break;
 			}
 		}
-		ichg_ua = max(CURRENT_FLOOR_UA, ichg_ua);
 	}
+
+	ichg_ua = clamp(ichg_ua, CURRENT_FLOOR_UA, ceil_ichg_ua);
 
 	if (opdata->current_ua != ichg_ua) {
 		ret = op_cg_current_set(opdata, ichg_ua);
@@ -180,12 +225,19 @@ static void op_cg_detect_uovp(struct op_cg_uovp_data *opdata)
 		opdata->uovp_cnt, opdata->vchg_mv);
 
 	opdata->uovp_state = true;
+	opdata->lock_current = false;
 
 	if (opdata->not_uovp_cnt)
 		opdata->not_uovp_cnt = 0;
 
 	if (opdata->last_uovp_state)
 		opdata->uovp_cnt++;
+
+	if (!opdata->is_overvolt && !opdata->config_en) {
+		ret = op_cg_configure_uvp(opdata, true);
+		if (!ret)
+			return;
+	}
 
 	/* Restore last known good current and lock */
 	if (!opdata->last_uovp_state && opdata->no_uovp_current_ua) {
@@ -266,9 +318,11 @@ static void op_cg_handle_uovp(struct op_cg_uovp_data *opdata)
 
 void op_check_charger_uovp(struct smb_charger *chg, int vchg_mv)
 {
+	struct op_cg_uovp_data *opdata = &op_uovp_data;
+
 	pr_info("vchg_mv=%d", vchg_mv);
 
-	if (!op_uovp_data.enable)
+	if (!opdata->initialized)
 		return;
 
 	if (!chg->vbus_present) {
@@ -276,31 +330,45 @@ void op_check_charger_uovp(struct smb_charger *chg, int vchg_mv)
 		return;
 	}
 
-	op_uovp_data.vchg_mv = vchg_mv;
-	op_cg_handle_uovp(&op_uovp_data);
+	/* Wait for the charger to settle */
+	if (!opdata->enable) {
+		opdata->enable = true;
+		return;
+	}
+
+	opdata->vchg_mv = vchg_mv;
+	op_cg_handle_uovp(opdata);
 }
 
 void op_cg_uovp_enable(struct smb_charger *chg, bool chg_present)
 {
-	if (op_uovp_data.enable == chg_present)
+	struct op_cg_uovp_data *opdata = &op_uovp_data;
+
+	if (opdata->enable == chg_present)
 		return;
 
 	if (chg_present) {
-		op_uovp_data.chg = chg;
-		op_uovp_data.enable = true;
-		pr_info("UOVP is enabled");
+		opdata->chg = chg;
+		opdata->apsd_bit = op_get_apsd_bit(chg);
+		opdata->initialized = true;
+		pr_info("UOVP is enabled, apsd_bit=0x%d", opdata->apsd_bit);
 	} else {
-		op_uovp_data.chg = NULL;
-		op_uovp_data.uovp_cnt = 0;
-		op_uovp_data.not_uovp_cnt = 0;
-		op_uovp_data.vchg_mv = 0;
-		op_uovp_data.current_ua = 0;
-		op_uovp_data.no_uovp_current_ua = 0;
-		op_uovp_data.last_uovp_state = false;
-		op_uovp_data.uovp_state = false;
-		op_uovp_data.is_overvolt = false;
-		op_uovp_data.lock_current = false;
-		op_uovp_data.enable = false;
+		chg->chg_ovp = false;
+		op_cg_configure_uvp(&op_uovp_data, false);
+		opdata->chg = NULL;
+		opdata->uovp_cnt = 0;
+		opdata->not_uovp_cnt = 0;
+		opdata->vchg_mv = 0;
+		opdata->current_ua = 0;
+		opdata->no_uovp_current_ua = 0;
+		opdata->apsd_bit = 0;
+		opdata->last_uovp_state = false;
+		opdata->uovp_state = false;
+		opdata->is_overvolt = false;
+		opdata->config_en = false;
+		opdata->lock_current = false;
+		opdata->initialized = false;
+		opdata->enable = false;
 		pr_info("UOVP is disabled");
 	}
 }
