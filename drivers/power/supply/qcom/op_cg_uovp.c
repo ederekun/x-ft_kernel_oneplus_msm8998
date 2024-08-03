@@ -23,6 +23,7 @@
 
 #define DETECT_CNT             3
 
+#define NO_CHARGER_BIT         0
 #define FAST_CHARGER_BITS \
 	(DCP_CHARGER_BIT | FLOAT_CHARGER_BIT | OCP_CHARGER_BIT)
 
@@ -56,12 +57,12 @@ struct op_cg_uovp_data {
 /* Table of max currents uA with their supported apsd bit */
 static const struct op_cg_current_table op_cg_current_data[] = {
 	{ CURRENT_FLOOR_UA, SDP_CHARGER_BIT   },
-	{ 750000, },
-	{ 1000000, },
-	{ 1250000, },
+	{ 750000,           NO_CHARGER_BIT    },
+	{ 1000000,          NO_CHARGER_BIT    },
+	{ 1250000,          NO_CHARGER_BIT    },
 	{ 1500000,          CDP_CHARGER_BIT   },
-	{ 2000000, },
-	{ 2500000, },
+	{ 2000000,          NO_CHARGER_BIT    },
+	{ 2500000,          NO_CHARGER_BIT    },
 	{ 3000000,          FAST_CHARGER_BITS },
 };
 
