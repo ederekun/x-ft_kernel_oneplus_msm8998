@@ -140,6 +140,7 @@ static int op_cg_configure_uvp(struct op_cg_uovp_data *opdata,
 	}
 	pr_info("Set SUSPEND_ON_COLLAPSE_USBIN_BIT to en=%d", !enable);
 
+	smblib_rerun_apsd_if_required(chg);
 	smblib_rerun_aicl(chg);
 	opdata->config_en = enable;
 err:
