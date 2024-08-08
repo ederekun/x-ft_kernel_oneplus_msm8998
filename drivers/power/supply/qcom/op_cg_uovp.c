@@ -40,14 +40,12 @@ struct op_cg_uovp_data {
 
 	int vchg_mv;
 	int current_ua;
-	int no_uovp_current_ua;
 
 	int apsd_bit;
 
 	bool last_uovp_state;
 	bool uovp_state;
 	bool is_overvolt;
-	bool lock_current;
 	bool config_en;
 
 	bool initialized;
@@ -166,17 +164,9 @@ static int op_cg_current_inc_dec(struct op_cg_uovp_data *opdata,
 		if (opdata->apsd_bit & d->apsd_bit)
 			ceil_ichg_ua = d->max_ichg_ua;
 	}
+	pr_info("ceil_ichg_ua=%d", ceil_ichg_ua);
 
 	if (increase) {
-		if (ichg_ua == ceil_ichg_ua && opdata->not_uovp_cnt >= DETECT_CNT) {
-			opdata->lock_current = true;
-			if (!opdata->no_uovp_current_ua)
-				opdata->no_uovp_current_ua = ichg_ua;
-			pr_info("max current has been reached - locked ichg_ua=%d", 
-					opdata->no_uovp_current_ua);
-			goto err;
-		}
-
 		for (i = 0; i < ARRAY_SIZE(op_cg_current_data); i++) {
 			const struct op_cg_current_table *d = &op_cg_current_data[i];
 
@@ -227,7 +217,6 @@ static void op_cg_detect_uovp(struct op_cg_uovp_data *opdata)
 		opdata->uovp_cnt, opdata->vchg_mv);
 
 	opdata->uovp_state = true;
-	opdata->lock_current = false;
 
 	if (opdata->not_uovp_cnt)
 		opdata->not_uovp_cnt = 0;
@@ -239,17 +228,6 @@ static void op_cg_detect_uovp(struct op_cg_uovp_data *opdata)
 		ret = op_cg_configure_uvp(opdata, true);
 		if (!ret)
 			return;
-	}
-
-	/* Restore last known good current and lock */
-	if (!opdata->last_uovp_state && opdata->no_uovp_current_ua) {
-		ret = op_cg_current_set(opdata, opdata->no_uovp_current_ua);
-		if (ret)
-			goto err;
-		opdata->lock_current = true;
-		pr_info("current has been locked to %d", 
-				opdata->no_uovp_current_ua);
-		return;
 	}
 
 	pr_info("uovp_state=%d last_uovp_state=%d uovp_cnt=%d",
@@ -281,9 +259,6 @@ static void op_cg_detect_normal(struct op_cg_uovp_data *opdata)
 	if (is_uovp)
 		return;
 
-	if (opdata->lock_current)
-		return;
-
 	opdata->uovp_state = false;
 
 	if (opdata->uovp_cnt)
@@ -301,7 +276,7 @@ static void op_cg_detect_normal(struct op_cg_uovp_data *opdata)
 	} else {
 		/* Increase the current if not undervolt for @DETECT_CNT iterations */
 		if (opdata->not_uovp_cnt >= DETECT_CNT) {
-			opdata->no_uovp_current_ua = opdata->current_ua;
+			opdata->not_uovp_cnt = 0;
 			op_cg_current_inc_dec(opdata, true);
 		}
 	}
@@ -357,20 +332,7 @@ void op_cg_uovp_enable(struct smb_charger *chg, bool chg_present)
 	} else {
 		chg->chg_ovp = false;
 		op_cg_configure_uvp(&op_uovp_data, false);
-		opdata->chg = NULL;
-		opdata->uovp_cnt = 0;
-		opdata->not_uovp_cnt = 0;
-		opdata->vchg_mv = 0;
-		opdata->current_ua = 0;
-		opdata->no_uovp_current_ua = 0;
-		opdata->apsd_bit = 0;
-		opdata->last_uovp_state = false;
-		opdata->uovp_state = false;
-		opdata->is_overvolt = false;
-		opdata->config_en = false;
-		opdata->lock_current = false;
-		opdata->initialized = false;
-		opdata->enable = false;
+		memset(opdata, 0, sizeof(*opdata));
 		pr_info("UOVP is disabled");
 	}
 }
