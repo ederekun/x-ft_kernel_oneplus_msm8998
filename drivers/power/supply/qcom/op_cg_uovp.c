@@ -18,6 +18,7 @@
 
 #define CURRENT_CEIL_DEFAULT   1500000 /* DCP_CURRENT_UA (normal) = 1.5A */
 #define CURRENT_FLOOR_UA       500000  /* SDP_CURRENT_UA = 500mA */
+#define CURRENT_DIFF_UA        250000  /* At least 250mA */
 
 #define CHG_SOFT_OVP_HYST_MV   100
 
@@ -45,6 +46,7 @@ struct op_cg_uovp_data {
 
 	bool last_uovp_state;
 	bool uovp_state;
+	bool not_uovp_limit;
 	bool is_overvolt;
 	bool config_en;
 
@@ -158,19 +160,24 @@ static int op_cg_current_inc_dec(struct op_cg_uovp_data *opdata,
 	pr_info("smblib_ichg_ua=%d", ichg_ua);
 	opdata->current_ua = ichg_ua;
 
-	for (i = 0; i < ARRAY_SIZE(op_cg_current_data); i++) {
-		const struct op_cg_current_table *d = &op_cg_current_data[i];
-
-		if (opdata->apsd_bit & d->apsd_bit)
-			ceil_ichg_ua = d->max_ichg_ua;
-	}
-	pr_info("ceil_ichg_ua=%d", ceil_ichg_ua);
-
 	if (increase) {
 		for (i = 0; i < ARRAY_SIZE(op_cg_current_data); i++) {
 			const struct op_cg_current_table *d = &op_cg_current_data[i];
 
-			if (d->max_ichg_ua > ichg_ua) {
+			if (opdata->apsd_bit & d->apsd_bit)
+				ceil_ichg_ua = d->max_ichg_ua;
+		}
+		pr_info("ceil_ichg_ua=%d", ceil_ichg_ua);
+
+		for (i = 0; i < ARRAY_SIZE(op_cg_current_data); i++) {
+			const struct op_cg_current_table *d = &op_cg_current_data[i];
+
+			if (d->max_ichg_ua >= ceil_ichg_ua) {
+				ichg_ua = ceil_ichg_ua;
+				break;
+			}
+
+			if (d->max_ichg_ua >= ichg_ua + CURRENT_DIFF_UA) {
 				ichg_ua = d->max_ichg_ua;
 				break;
 			}
@@ -179,14 +186,17 @@ static int op_cg_current_inc_dec(struct op_cg_uovp_data *opdata,
 		for (i = ARRAY_SIZE(op_cg_current_data) - 1; i >= 0; i--) {
 			const struct op_cg_current_table *d = &op_cg_current_data[i];
 
-			if (d->max_ichg_ua < ichg_ua) {
+			if (d->max_ichg_ua == CURRENT_FLOOR_UA) {
+				ichg_ua = CURRENT_FLOOR_UA;
+				break;
+			}
+
+			if (d->max_ichg_ua <= ichg_ua - CURRENT_DIFF_UA) {
 				ichg_ua = d->max_ichg_ua;
 				break;
 			}
 		}
 	}
-
-	ichg_ua = clamp(ichg_ua, CURRENT_FLOOR_UA, ceil_ichg_ua);
 
 	if (opdata->current_ua != ichg_ua) {
 		ret = op_cg_current_set(opdata, ichg_ua);
@@ -194,7 +204,6 @@ static int op_cg_current_inc_dec(struct op_cg_uovp_data *opdata,
 		pr_err("ichg_ua already at %d mA", (ichg_ua / 1000));
 		ret = -EINVAL;
 	}
-err:
 	return ret;
 }
 
@@ -217,6 +226,7 @@ static void op_cg_detect_uovp(struct op_cg_uovp_data *opdata)
 		opdata->uovp_cnt, opdata->vchg_mv);
 
 	opdata->uovp_state = true;
+	opdata->not_uovp_limit = false;
 
 	if (opdata->not_uovp_cnt)
 		opdata->not_uovp_cnt = 0;
@@ -235,7 +245,7 @@ static void op_cg_detect_uovp(struct op_cg_uovp_data *opdata)
 
 	/* Increase the current if over, decrease if under */
 	ret = op_cg_current_inc_dec(opdata, opdata->is_overvolt);
-err:
+
 	/* Only call cutoff if current control fails */
 	if (ret && !chg->chg_ovp)
 		op_cg_uovp_cutoff(opdata);
@@ -245,6 +255,7 @@ static void op_cg_detect_normal(struct op_cg_uovp_data *opdata)
 {
 	struct smb_charger *chg = opdata->chg;
 	bool is_uovp = false;
+	int ret = 0;
 
 	is_uovp = opdata->is_overvolt = 
 		!(opdata->vchg_mv < 
@@ -273,11 +284,13 @@ static void op_cg_detect_normal(struct op_cg_uovp_data *opdata)
 
 	if (chg->chg_ovp) {
 		op_cg_uovp_restore(opdata);
-	} else {
+	} else if (!opdata->not_uovp_limit) {
 		/* Increase the current if not undervolt for @DETECT_CNT iterations */
 		if (opdata->not_uovp_cnt >= DETECT_CNT) {
 			opdata->not_uovp_cnt = 0;
-			op_cg_current_inc_dec(opdata, true);
+			ret = op_cg_current_inc_dec(opdata, true);
+			if (ret)
+				opdata->not_uovp_limit = true;
 		}
 	}
 }
