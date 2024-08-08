@@ -1156,10 +1156,14 @@ clk_byte2_recalc_rate(struct clk_hw *hw, unsigned long parent_rate)
 	unsigned long recalc_rate;
 	int rc;
 
-	recalc_rate = clk_rcg2_recalc_rate(hw, parent_rate);
-	rc = clk_byte2_set_rate(hw, recalc_rate, parent_rate);
-	if (rc)
-		pr_err("%s: failed to reconfigure", __func__);
+	if (parent_rate && parent_rate != cxo_f.freq) {
+		recalc_rate = clk_rcg2_recalc_rate(hw, parent_rate);
+		rc = clk_byte2_set_rate(hw, recalc_rate, parent_rate);
+		if (rc)
+			pr_err("%s: failed to reconfigure", __func__);
+	} else {
+		recalc_rate = parent_rate;
+	}
 
 	return recalc_rate;
 }
@@ -1265,10 +1269,14 @@ clk_pixel_recalc_rate(struct clk_hw *hw, unsigned long parent_rate)
 	unsigned long recalc_rate;
 	int rc;
 
-	recalc_rate = clk_rcg2_recalc_rate(hw, parent_rate);
-	rc = clk_pixel_set_rate(hw, recalc_rate, parent_rate);
-	if (rc)
-		pr_err("%s: failed to reconfigure", __func__);
+	if (parent_rate && parent_rate != cxo_f.freq) {
+		recalc_rate = clk_rcg2_recalc_rate(hw, parent_rate);
+		rc = clk_pixel_set_rate(hw, recalc_rate, parent_rate);
+		if (rc)
+			pr_err("%s: failed to reconfigure", __func__);
+	} else {
+		recalc_rate = parent_rate;
+	}
 
 	return recalc_rate;
 }
