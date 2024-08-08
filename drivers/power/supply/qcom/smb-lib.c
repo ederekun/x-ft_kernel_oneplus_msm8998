@@ -5263,7 +5263,6 @@ static void op_handle_usb_removal(struct smb_charger *chg)
 	op_battery_temp_region_set(chg, BATT_TEMP_INVALID);
 }
 
-#define CHECK_STATUS_DELAY 2000 /* 2s */
 static void check_dash_status(struct work_struct *work)
 {
 	int status;
@@ -5272,13 +5271,17 @@ static void check_dash_status(struct work_struct *work)
 	if (status == POWER_SUPPLY_STATUS_CHARGING)
 		return;
 
-	pr_warn("not charging, will disable dash after 2s");
+	pr_warn("not charging, will disable dash after %d ms", 
+			HEARTBEAT_INTERVAL_MS);
 
 	/* Ensure the charger has transitioned before checking again */
-	msleep(CHECK_STATUS_DELAY);
+	msleep(HEARTBEAT_INTERVAL_MS);
 
 	status = get_charging_status();
-	if (status == POWER_SUPPLY_STATUS_NOT_CHARGING) {
+	g_chg->dash_on = get_prop_fast_chg_started(g_chg);
+
+	if (status == POWER_SUPPLY_STATUS_NOT_CHARGING &&
+			!g_chg->dash_on) {
 		pr_warn("still not charging, fully switch to normal");
 		set_dash_charger_present(false);
 	} else {
