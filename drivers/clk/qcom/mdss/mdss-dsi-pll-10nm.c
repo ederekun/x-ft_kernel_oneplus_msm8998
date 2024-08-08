@@ -1232,9 +1232,11 @@ static unsigned long vco_10nm_recalc_rate(struct clk_hw *hw,
 	 * usually indicates they're about to change configurations.
 	 */
 	if (pll->vco_current_rate != 0) {
-		rc = hw->init->ops->set_rate(hw, pll->vco_current_rate, parent_rate);
-		if (rc)
-			pr_err("%s: reconfiguration failed\n", __func__);
+		if (!pll->handoff_resources) {
+			rc = hw->init->ops->set_rate(hw, pll->vco_current_rate, parent_rate);
+			if (rc)
+				pr_err("%s: reconfiguration failed\n", __func__);
+		}
 
 		pr_debug("returning vco rate = %lld\n", pll->vco_current_rate);
 		return pll->vco_current_rate;
