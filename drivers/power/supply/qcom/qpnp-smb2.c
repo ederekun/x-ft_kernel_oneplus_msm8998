@@ -1895,7 +1895,8 @@ static int smb2_init_hw(struct smb2 *chip)
 			true, 0);
 	/* disable HVDCP */
 	rc = smblib_masked_write(chg, USBIN_OPTIONS_1_CFG_REG,
-		HVDCP_EN_BIT, 0);
+		HVDCP_EN_BIT | HVDCP_AUTH_ALG_EN_CFG_BIT | 
+		HVDCP_AUTONOMOUS_MODE_EN_CFG_BIT, 0);
 	if (rc < 0)
 		dev_err(chg->dev, "Couldn't disable HVDCP rc=%d\n", rc);
 

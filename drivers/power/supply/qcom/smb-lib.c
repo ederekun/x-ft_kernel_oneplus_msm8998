@@ -1377,42 +1377,7 @@ static int smblib_hvdcp_enable_vote_callback(struct votable *votable,
 			void *data,
 			int hvdcp_enable, const char *client)
 {
-	struct smb_charger *chg = data;
-	int rc;
-	u8 val = HVDCP_AUTH_ALG_EN_CFG_BIT | HVDCP_EN_BIT;
-	u8 stat;
-
-	/* vote to enable/disable HW autonomous INOV */
-	vote(chg->hvdcp_hw_inov_dis_votable, client, !hvdcp_enable, 0);
-
-	/*
-	 * Disable the autonomous bit and auth bit for disabling hvdcp.
-	 * This ensures only qc 2.0 detection runs but no vbus
-	 * negotiation happens.
-	 */
-	if (!hvdcp_enable)
-		val = HVDCP_EN_BIT;
-
-	rc = smblib_masked_write(chg, USBIN_OPTIONS_1_CFG_REG,
-				 HVDCP_EN_BIT | HVDCP_AUTH_ALG_EN_CFG_BIT,
-				 val);
-	if (rc < 0) {
-		smblib_err(chg, "Couldn't %s hvdcp rc=%d\n",
-			hvdcp_enable ? "enable" : "disable", rc);
-		return rc;
-	}
-
-	rc = smblib_read(chg, APSD_STATUS_REG, &stat);
-	if (rc < 0) {
-		smblib_err(chg, "Couldn't read APSD status rc=%d\n", rc);
-		return rc;
-	}
-
-	/* re-run APSD if HVDCP was detected */
-	if (stat & QC_CHARGER_BIT)
-		smblib_rerun_apsd(chg);
-
-	return 0;
+	return -ENOTSUPP;
 }
 
 static int smblib_hvdcp_disable_indirect_vote_callback(struct votable *votable,
@@ -1457,32 +1422,7 @@ static int smblib_apsd_disable_vote_callback(struct votable *votable,
 static int smblib_hvdcp_hw_inov_dis_vote_callback(struct votable *votable,
 				void *data, int disable, const char *client)
 {
-	struct smb_charger *chg = data;
-	int rc;
-
-	if (disable) {
-		/*
-		 * the pulse count register get zeroed when autonomous mode is
-		 * disabled. Track that in variables before disabling
-		 */
-		rc = smblib_get_hw_pulse_cnt(chg, &chg->pulse_cnt);
-		if (rc < 0) {
-			pr_err("failed to read QC_PULSE_COUNT_STATUS_REG rc=%d\n",
-					rc);
-			return rc;
-		}
-	}
-
-	rc = smblib_masked_write(chg, USBIN_OPTIONS_1_CFG_REG,
-			HVDCP_AUTONOMOUS_MODE_EN_CFG_BIT,
-			disable ? 0 : HVDCP_AUTONOMOUS_MODE_EN_CFG_BIT);
-	if (rc < 0) {
-		smblib_err(chg, "Couldn't %s hvdcp rc=%d\n",
-				disable ? "disable" : "enable", rc);
-		return rc;
-	}
-
-	return rc;
+	return -ENOTSUPP;
 }
 
 static int smblib_usb_irq_enable_vote_callback(struct votable *votable,
