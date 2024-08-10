@@ -3410,10 +3410,26 @@ static int fg_psy_get_property(struct power_supply *psy,
 			pval->intval = -EINVAL;
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_COUNTER:
-		rc = fg_get_charge_counter(fg, &pval->intval);
+		if (!get_extern_fg_regist_done() && get_extern_bq_present())
+			pval->intval = -EINVAL;
+		else if (chip->use_external_fg && external_fg->get_batt_full_chg_capacity &&
+				external_fg->get_battery_soc)
+			pval->intval = external_fg->get_battery_soc() * 
+					external_fg->get_batt_full_chg_capacity() /* in uAh */ /
+					100;
+		else
+			rc = fg_get_charge_counter(fg, &pval->intval);
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_COUNTER_SHADOW:
-		rc = fg_get_charge_counter_shadow(fg, &pval->intval);
+		if (!get_extern_fg_regist_done() && get_extern_bq_present())
+			pval->intval = -EINVAL;
+		else if (chip->use_external_fg && external_fg->get_batt_full_chg_capacity &&
+				external_fg->get_batt_bq_soc)
+			pval->intval = external_fg->get_batt_bq_soc() * 
+					external_fg->get_batt_full_chg_capacity() /* in uAh */ /
+					100;
+		else
+			rc = fg_get_charge_counter_shadow(fg, &pval->intval);
 		break;
 	case POWER_SUPPLY_PROP_TIME_TO_FULL_AVG:
 		rc = fg_get_time_to_full(fg, &pval->intval);
