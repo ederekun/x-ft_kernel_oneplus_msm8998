@@ -136,6 +136,9 @@ struct boost_groups {
 	} group[BOOSTGROUPS_COUNT];
 	/* CPU's boost group locking */
 	raw_spinlock_t lock;
+	/* Work structs for updating CPU util */
+	struct workqueue_struct *wq;
+	struct work_struct cpu_work;
 };
 
 /* Boost groups affecting each CPU in the system */
@@ -259,6 +262,18 @@ schedtune_cpu_update(int cpu, u64 now)
 	bg->boost_ts = boost_ts;
 }
 
+static void
+schedtune_boostgroup_update_cpu(struct work_struct *work)
+{
+	struct rq *rq = this_rq();
+	struct rq_flags rf;
+
+	rq_lock_irqsave(rq, &rf);
+	update_rq_clock(rq);
+	cpufreq_update_util(rq, 0);
+	rq_unlock_irqrestore(rq, &rf);
+}
+
 static int
 schedtune_boostgroup_update(int idx, int boost)
 {
@@ -289,6 +304,7 @@ schedtune_boostgroup_update(int idx, int boost)
 			schedtune_boost_group_active(idx, bg, now)) {
 			bg->boost_max = boost;
 			bg->boost_ts = bg->group[idx].ts;
+			queue_work_on(cpu, bg->wq, &bg->cpu_work);
 
 			trace_sched_tune_boostgroup_update(cpu, 1, bg->boost_max);
 			continue;
@@ -787,13 +803,23 @@ static inline void
 schedtune_init_cgroups(void)
 {
 	struct boost_groups *bg;
+	struct workqueue_struct *wq;
 	int cpu;
+
+	wq = alloc_workqueue("schedtune_wq", WQ_HIGHPRI, 0);
+	if (!wq) {
+		pr_err("schedtune: workqueue alloc failed\n");
+		wq = system_highpri_wq;
+	}
 
 	/* Initialize the per CPU boost groups */
 	for_each_possible_cpu(cpu) {
 		bg = &per_cpu(cpu_boost_groups, cpu);
 		memset(bg, 0, sizeof(struct boost_groups));
 		raw_spin_lock_init(&bg->lock);
+		bg->wq = wq;
+		INIT_WORK(&bg->cpu_work, 
+				schedtune_boostgroup_update_cpu);
 	}
 
 	pr_info("schedtune: configured to support %d boost groups\n",
