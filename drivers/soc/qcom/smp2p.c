@@ -27,6 +27,7 @@
 #include <linux/soc/qcom/smem_state.h>
 #include <linux/spinlock.h>
 #include <linux/pm_wakeup.h>
+#include <linux/suspend.h>
 
 #include <linux/ipc_logging.h>
 
@@ -178,6 +179,8 @@ do {	\
 		ipc_log_string(ilc, "[%s]: "x, __func__, ##__VA_ARGS__); \
 } while (0)
 
+static bool should_wake = false;
+
 static void qcom_smp2p_kick(struct qcom_smp2p *smp2p)
 {
 	/* Make sure any updated data is written before the kick */
@@ -322,6 +325,10 @@ static irqreturn_t qcom_smp2p_intr(int irq, void *data)
 	unsigned int smem_id = smp2p->smem_items[SMP2P_INBOUND];
 	unsigned int pid = smp2p->remote_pid;
 	size_t size;
+
+	/* Hard system wakeup */
+	if (should_wake)
+		pm_system_wakeup();
 
 	in = smp2p->in;
 
@@ -680,14 +687,12 @@ static int qcom_smp2p_probe(struct platform_device *pdev)
 
 	ret = devm_request_threaded_irq(&pdev->dev, smp2p->irq,
 					qcom_smp2p_isr, qcom_smp2p_intr,
-					IRQF_ONESHOT,
+					IRQF_NO_SUSPEND | IRQF_ONESHOT,
 					"smp2p", (void *)smp2p);
 	if (ret) {
 		dev_err(&pdev->dev, "failed to request interrupt\n");
 		goto unwind_interfaces;
 	}
-
-	enable_irq_wake(smp2p->irq);
 
 	return 0;
 
@@ -797,9 +802,25 @@ static int qcom_smp2p_suspend(struct device *dev)
 	return 0;
 }
 
+static int qcom_smp2p_suspend_no_irq(struct device *dev)
+{
+	should_wake = true;
+
+	return 0;
+}
+
+static int qcom_smp2p_resume_no_irq(struct device *dev)
+{
+	should_wake = false;
+
+	return 0;
+}
+
 static const struct dev_pm_ops qcom_smp2p_pm_ops = {
 	.freeze = qcom_smp2p_suspend,
 	.restore = qcom_smp2p_resume,
+	.suspend_noirq = qcom_smp2p_suspend_no_irq,
+	.resume_noirq = qcom_smp2p_resume_no_irq,
 };
 
 static const struct of_device_id qcom_smp2p_of_match[] = {
