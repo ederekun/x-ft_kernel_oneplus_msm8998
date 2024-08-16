@@ -17,6 +17,9 @@ extern struct reciprocal_value schedtune_spc_rdiv;
 /* We hold schedtune boost in effect for at least this long */
 #define SCHEDTUNE_BOOST_HOLD_NS 50000000ULL
 
+/* Disable the boost after 5 seconds */
+#define SCHEDTUNE_BOOST_INPUT_SEC (5 * NSEC_PER_SEC)
+
 /*
  * EAS scheduler tunables for task groups.
  */
@@ -133,6 +136,8 @@ struct boost_groups {
 		unsigned tasks;
 		/* Timestamp of boost activation */
 		u64 ts;
+		/* Timestamp of boost input */
+		u64 input_ts;
 	} group[BOOSTGROUPS_COUNT];
 	/* CPU's boost group locking */
 	raw_spinlock_t lock;
@@ -218,6 +223,18 @@ static inline bool schedtune_boost_timeout(u64 now, u64 ts)
 	return ((now - ts) > SCHEDTUNE_BOOST_HOLD_NS);
 }
 
+static inline bool 
+schedtune_input_timeout(int idx, struct boost_groups* bg, u64 now)
+{
+	/* Only apply timeout to positive boost inputs */
+	if (bg->group[idx].boost > 0) {
+		u64 ts = bg->group[idx].input_ts;
+		return ((now - ts) > SCHEDTUNE_BOOST_INPUT_SEC);
+	}
+
+	return false;
+}
+
 static inline bool
 schedtune_boost_group_active(int idx, struct boost_groups* bg, u64 now)
 {
@@ -239,6 +256,10 @@ schedtune_cpu_update(int cpu, u64 now)
 	boost_max = bg->group[0].boost;
 	boost_ts = now;
 	for (idx = 1; idx < BOOSTGROUPS_COUNT; ++idx) {
+		/* Check if boost is past its timelimit, if it is then skip it */
+		if (schedtune_input_timeout(idx, bg, now))
+			continue;
+
 		/*
 		 * A boost group affects a CPU only if it has
 		 * RUNNABLE tasks on that CPU or it has hold
@@ -286,6 +307,7 @@ schedtune_boostgroup_update(int idx, int boost)
 	/* Update per CPU boost groups */
 	for_each_possible_cpu(cpu) {
 		bg = &per_cpu(cpu_boost_groups, cpu);
+		now = sched_clock_cpu(cpu);
 
 		/*
 		 * Keep track of current boost values to compute the per CPU
@@ -297,9 +319,10 @@ schedtune_boostgroup_update(int idx, int boost)
 
 		/* Update the boost value of this boost group */
 		bg->group[idx].boost = boost;
+		if (boost > 0)
+			bg->group[idx].input_ts = now;
 
 		/* Check if this update increase current max */
-		now = sched_clock_cpu(cpu);
 		if (boost > cur_boost_max &&
 			schedtune_boost_group_active(idx, bg, now)) {
 			bg->boost_max = boost;
@@ -722,6 +745,7 @@ schedtune_boostgroup_init(struct schedtune *st)
 		bg->group[st->idx].boost = 0;
 		bg->group[st->idx].tasks = 0;
 		bg->group[st->idx].ts = 0;
+		bg->group[st->idx].input_ts = 0;
 	}
 
 	return 0;
