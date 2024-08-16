@@ -197,6 +197,13 @@
 			};
 		};
 	};
+
+	/* Only support USB2.0 maximum speed */
+	usb3: ssusb@a800000 {
+		dwc3@a800000 {
+			maximum-speed = "high-speed";
+		};
+	};
 };
 
 &pm8998_gpios {
