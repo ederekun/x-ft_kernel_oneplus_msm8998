@@ -334,7 +334,7 @@ void op_cg_uovp_enable(struct smb_charger *chg, bool chg_present)
 {
 	struct op_cg_uovp_data *opdata = &op_uovp_data;
 
-	if (opdata->enable == chg_present)
+	if (opdata->initialized == chg_present)
 		return;
 
 	if (chg_present) {
