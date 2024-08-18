@@ -73,17 +73,16 @@ enum {
 	P_GPLL0,
 	P_GPU_CC_PLL0_OUT_EVEN,
 	P_GPU_CC_PLL0_OUT_MAIN,
-	P_CRC_DIV,
 };
 
 static const struct parent_map gpucc_parent_map_0[] = {
 	{ P_GPU_XO, 0 },
-	{ P_CRC_DIV,  1 },
+	{ P_GPU_CC_PLL0_OUT_EVEN,  1 },
 };
 
 static const char * const gpucc_parent_names_0[] = {
 	"gpucc_xo",
-	"crc_div",
+	"gpucc_pll0_out_even",
 };
 
 static const struct parent_map gpucc_parent_map_1[] = {
@@ -154,27 +153,15 @@ static struct clk_alpha_pll_postdiv gpu_pll0_out_even = {
 	},
 };
 
-static struct clk_fixed_factor crc_div = {
-	.mult = 1,
-	.div = 2,
-	.hw.init = &(struct clk_init_data) {
-		.name = "crc_div",
-		.parent_names = (const char *[]){ "gpucc_pll0_out_even" },
-		.num_parents = 1,
-		.flags = CLK_SET_RATE_PARENT,
-		.ops = &clk_fixed_factor_ops,
-	},
-};
-
 static struct freq_tbl ftbl_gfx3d_clk_src[] = {
-	F(180000000, P_CRC_DIV, 1, 0, 0),
-	F(257000000, P_CRC_DIV, 1, 0, 0),
-	F(342000000, P_CRC_DIV, 1, 0, 0),
-	F(414000000, P_CRC_DIV, 1, 0, 0),
-	F(515000000, P_CRC_DIV, 1, 0, 0),
-	F(596000000, P_CRC_DIV, 1, 0, 0),
-	F(670000000, P_CRC_DIV, 1, 0, 0),
-	F(710000000, P_CRC_DIV, 1, 0, 0),
+	F(180000000, P_GPU_CC_PLL0_OUT_EVEN, 2, 0, 0),
+	F(257000000, P_GPU_CC_PLL0_OUT_EVEN, 2, 0, 0),
+	F(342000000, P_GPU_CC_PLL0_OUT_EVEN, 2, 0, 0),
+	F(414000000, P_GPU_CC_PLL0_OUT_EVEN, 2, 0, 0),
+	F(515000000, P_GPU_CC_PLL0_OUT_EVEN, 2, 0, 0),
+	F(596000000, P_GPU_CC_PLL0_OUT_EVEN, 2, 0, 0),
+	F(670000000, P_GPU_CC_PLL0_OUT_EVEN, 2, 0, 0),
+	F(710000000, P_GPU_CC_PLL0_OUT_EVEN, 2, 0, 0),
 	{ }
 };
 
@@ -356,93 +343,6 @@ static struct mux_clk gpucc_gcc_dbg_clk = {
 };
 #endif
 
-static void enable_gfx_crc(void __iomem *base)
-{
-	u32 regval;
-
-	clk_set_rate(gpucc_gfx3d_clk.clkr.hw.clk, 
-			ftbl_gfx3d_clk_src[VDD_GFX_LOW_SVS].freq);
-
-	/* Turn on the GPU_CX GDSC */
-	regval = readl_relaxed(base + GPU_CX_GDSCR_OFFSET);
-	regval &= ~SW_COLLAPSE_MASK;
-	writel_relaxed(regval, base + GPU_CX_GDSCR_OFFSET);
-
-	/* Wait for 10usecs to let the GDSC turn ON */
-	mb();
-	udelay(10);
-
-	/* Turn on the Graphics rail */
-	if (regulator_enable(vdd_gpucc.regulator[0]))
-		pr_warn("Failed to enable VDD_GPUCC during CRC sequence!\n");
-	/* Turn on the GPU_GX GDSC */
-	writel_relaxed(0x1, base + GPU_GX_BCR_OFFSET);
-
-	/*
-	 * BLK_ARES should be kept asserted for 1us before being de-asserted.
-	 */
-	wmb();
-	udelay(1);
-	writel_relaxed(0x0, base + GPU_GX_BCR_OFFSET);
-	regval = readl_relaxed(base + 0x130);
-	regval |= BIT(4);
-	writel_relaxed(regval, base + 0x130);
-
-	/* Keep reset asserted for at-least 1us before continuing. */
-	wmb();
-	udelay(1);
-	regval &= ~BIT(4);
-	writel_relaxed(regval, base + 0x130);
-
-	/* Make sure GMEM_RESET is de-asserted before continuing. */
-	wmb();
-	regval &= ~BIT(0);
-	writel_relaxed(regval, base + 0x130);
-
-	/* All previous writes should be done at this point */
-	wmb();
-	regval = readl_relaxed(base + GPU_GX_GDSCR_OFFSET);
-	regval &= ~SW_COLLAPSE_MASK;
-	writel_relaxed(regval, base + GPU_GX_GDSCR_OFFSET);
-
-	/* Wait for 10usecs to let the GDSC turn ON */
-	mb();
-	udelay(10);
-
-	/* Enable the graphics clock */
-	clk_prepare_enable(gpucc_gfx3d_clk.clkr.hw.clk);
-
-	/* Enabling MND RC in Bypass mode */
-	writel_relaxed(0x00015010, base + CRC_MND_CFG_OFFSET);
-	writel_relaxed(0x00800000, base + CRC_SID_FSM_OFFSET);
-
-	/* Wait for 16 cycles before continuing */
-	udelay(1);
-	clk_set_rate(gpucc_gfx3d_clk.clkr.hw.clk, 
-			ftbl_gfx3d_clk_src[VDD_GFX_TURBO_L1].freq);
-
-	/* Disable the graphics clock */
-	clk_disable_unprepare(gpucc_gfx3d_clk.clkr.hw.clk);
-
-	/* Turn off the gpu_cx and gpu_gx GDSCs */
-	regval = readl_relaxed(base + GPU_GX_GDSCR_OFFSET);
-	regval |= SW_COLLAPSE_MASK;
-	writel_relaxed(regval, base + GPU_GX_GDSCR_OFFSET);
-
-	/* Write to disable GX GDSC should go through before continuing */
-	wmb();
-	regval = readl_relaxed(base + 0x130);
-	regval |= BIT(0);
-	writel_relaxed(regval, base + 0x130);
-
-	/* Make sure GMEM_CLAMP_IO is asserted before continuing. */
-	wmb();
-	regulator_disable(vdd_gpucc.regulator[0]);
-	regval = readl_relaxed(base + GPU_CX_GDSCR_OFFSET);
-	regval |= SW_COLLAPSE_MASK;
-	writel_relaxed(regval, base + GPU_CX_GDSCR_OFFSET);
-}
-
 /*
 static struct mux_clk gfxcc_dbg_clk = {
 	.ops = &mux_reg_ops,
@@ -525,13 +425,6 @@ int gpucc_msm8998_probe(struct platform_device *pdev)
 		return -EINVAL;
 	}
 
-	/* Register clock fixed factor for CRC divide. */
-	rc = devm_clk_hw_register(&pdev->dev, &crc_div.hw);
-	if (rc) {
-		dev_err(&pdev->dev, "Failed to register hardware clock\n");
-		return rc;
-	}
-
 	regmap = devm_regmap_init_mmio(&pdev->dev, base,
 					gpucc_msm8998_desc.config);
 	if (IS_ERR(regmap)) {
@@ -546,6 +439,9 @@ int gpucc_msm8998_probe(struct platform_device *pdev)
 				"Unable to get vdd_gpucc regulator\n");
 		return PTR_ERR(vdd_gpucc.regulator[0]);
 	}
+
+	/* Avoid turning on the rail during clock registration */
+	vdd_gpucc.skip_handoff = true;
 
 	vdd_gpucc_mx.regulator[0] = devm_regulator_get(&pdev->dev, "vdd_mx");
 	if (IS_ERR(vdd_gpucc_mx.regulator[0])) {
@@ -571,8 +467,6 @@ int gpucc_msm8998_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "Failed to register GPUCC clocks\n");
 		return rc;
 	}
-
-	enable_gfx_crc(base);
 
 	dev_info(&pdev->dev, "Registered GPUCC clocks\n");
 	return 0;
