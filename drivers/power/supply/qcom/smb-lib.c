@@ -5203,9 +5203,13 @@ static void op_handle_usb_removal(struct smb_charger *chg)
 	op_battery_temp_region_set(chg, BATT_TEMP_INVALID);
 }
 
+/* Better switch to normal charging if current drops */
+#define USBIN_DASH_MIN_MA USBIN_500MA
+
 static void check_dash_status(struct work_struct *work)
 {
-	int status;
+	union power_supply_propval val;
+	int status, rc = 0;
 
 	status = get_charging_status();
 	if (status == POWER_SUPPLY_STATUS_CHARGING)
@@ -5217,16 +5221,35 @@ static void check_dash_status(struct work_struct *work)
 	/* Ensure the charger has transitioned before checking again */
 	msleep(HEARTBEAT_INTERVAL_MS);
 
-	status = get_charging_status();
-	g_chg->dash_on = get_prop_fast_chg_started(g_chg);
-
-	if (status == POWER_SUPPLY_STATUS_NOT_CHARGING &&
-			!g_chg->dash_on) {
-		pr_warn("still not charging, fully switch to normal");
-		set_dash_charger_present(false);
-	} else {
-		pr_info("charging, dash will continue to be present");
+	rc = smblib_get_prop_from_bms(g_chg, 
+			POWER_SUPPLY_PROP_CURRENT_NOW, &val);
+	if (rc) {
+		pr_info("failed to get current, fully switch to normal");
+		goto not_charging;
 	}
+
+	pr_info("charging current = %d, minimum current = %d", 
+			val.intval / 1000, USBIN_DASH_MIN_MA / 1000);
+
+	status = get_charging_status();
+	if (status == POWER_SUPPLY_STATUS_NOT_CHARGING) {
+		pr_warn("still not charging, fully switch to normal");
+		goto not_charging;
+	}
+
+	if (val.intval <= USBIN_DASH_MIN_MA) {
+		pr_warn("charging is very slow, fully switch to normal");
+		goto not_charging;
+	}
+
+	goto charging;
+
+not_charging:
+	set_dash_charger_present(false);
+	return;
+
+charging:
+	pr_info("charging, dash will continue to be present");
 }
 DECLARE_WORK(check_dash_status_work, check_dash_status);
 
