@@ -102,7 +102,7 @@ static int op_cg_current_set(struct op_cg_uovp_data *opdata,
 
 	pr_info("voting ichg_ua=%d", ichg_ua);
 
-	ret = vote(chg->usb_icl_votable, USB_PSY_VOTER,
+	ret = vote(chg->usb_icl_votable, DCP_VOTER,
 					true, ichg_ua);
 	if (ret) {
 		pr_err("can't set charger max current, ret=%d", ret);
