@@ -1985,7 +1985,7 @@ static struct clk_branch gcc_cfg_noc_usb3_axi_clk = {
 				"usb30_master_clk_src"
 			},
 			.num_parents = 1,
-			//.flags = CLK_SET_RATE_PARENT, //HANDOFF?
+			.flags = CLK_SET_RATE_PARENT,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -2557,15 +2557,13 @@ static struct clk_branch gcc_usb30_master_clk = {
 		.enable_mask = BIT(0),
 		.hw.init = &(struct clk_init_data) {
 			.name = "gcc_usb30_master_clk",
-			/*TODO: Should we depend on gcc_cfg_noc_usb3_axi_clk?*/
 			.parent_names = (const char*[]) {
-				"usb30_master_clk_src",
+				"gcc_cfg_noc_usb3_axi_clk",
 			},
 			.num_parents = 1,
 			.flags = CLK_SET_RATE_PARENT,
 			.ops = &clk_branch2_ops,
 		},
-		// wtf? .depends = &gcc_cfg_noc_usb3_axi_clk.c,
 	},
 };
 
