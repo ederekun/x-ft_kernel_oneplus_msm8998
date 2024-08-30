@@ -5203,48 +5203,73 @@ static void op_handle_usb_removal(struct smb_charger *chg)
 	op_battery_temp_region_set(chg, BATT_TEMP_INVALID);
 }
 
-/* Better switch to normal charging if current drops */
-#define USBIN_DASH_MIN_MA USBIN_500MA
+/* Wait for 15 seconds */
+#define DASH_STATUS_WAIT (15 * 1000)
+
+/* SOC is considered to be stuck after 5 minutes */
+#define DASH_STATUS_RETRIES 20
 
 static void check_dash_status(struct work_struct *work)
 {
 	union power_supply_propval val;
+	int prev_soc = -1;
 	int status, rc = 0;
+	int retries = 0;
 
 	status = get_charging_status();
 	if (status == POWER_SUPPLY_STATUS_CHARGING)
 		return;
 
-	pr_warn("not charging, will disable dash after %d ms", 
-			HEARTBEAT_INTERVAL_MS);
-
-	/* Ensure the charger has transitioned before checking again */
-	msleep(HEARTBEAT_INTERVAL_MS);
-
 	rc = smblib_get_prop_from_bms(g_chg, 
-			POWER_SUPPLY_PROP_CURRENT_NOW, &val);
+			POWER_SUPPLY_PROP_BQ_SOC, &val);
 	if (rc) {
-		pr_info("failed to get current, fully switch to normal");
-		goto not_charging;
+		pr_warn("failed to get soc, will not check");
+	} else {
+		pr_info("fastcg full soc=%d", val.intval);
+		prev_soc = val.intval;
 	}
 
-	pr_info("charging current = %d, minimum current = %d", 
-			val.intval / 1000, USBIN_DASH_MIN_MA / 1000);
+	pr_warn("not charging, will disable dash after %d ms", 
+			DASH_STATUS_WAIT);
+
+retry:
+	/* Ensure the charger has settled before checking again */
+	msleep(DASH_STATUS_WAIT);
 
 	status = get_charging_status();
 	if (status == POWER_SUPPLY_STATUS_NOT_CHARGING) {
-		pr_warn("still not charging, fully switch to normal");
+		pr_warn("still not charging");
 		goto not_charging;
 	}
 
-	if (val.intval <= USBIN_DASH_MIN_MA) {
-		pr_warn("charging is very slow, fully switch to normal");
-		goto not_charging;
+	if (prev_soc != -1) {
+		rc = smblib_get_prop_from_bms(g_chg, 
+				POWER_SUPPLY_PROP_BQ_SOC, &val);
+		if (rc) {
+			/* This should have worked, switch to normal to be safe */
+			pr_warn("failed to get soc");
+			goto not_charging;
+		}
+
+		if (val.intval == prev_soc) {
+			if (retries >= DASH_STATUS_RETRIES) {
+				pr_warn("soc is not increasing");
+				goto not_charging;
+			}
+			retries++;
+			goto retry;
+		}
+
+		if (val.intval < prev_soc) {
+			pr_warn("soc dropped");
+			goto not_charging;
+		}
 	}
 
 	goto charging;
 
 not_charging:
+	pr_warn("fully switch to normal");
 	set_dash_charger_present(false);
 	return;
 
@@ -5258,8 +5283,6 @@ int update_dash_unplug_status(void)
 	int rc;
 	union power_supply_propval vbus_val;
 
-	schedule_work(&check_dash_status_work);
-
 	rc = smblib_get_prop_usb_voltage_now(g_chg, &vbus_val);
 	if (rc < 0)
 		pr_err("failed to read usb_voltage rc=%d\n", rc);
@@ -5268,6 +5291,8 @@ int update_dash_unplug_status(void)
 		smblib_update_usb_type(g_chg);
 		power_supply_changed(g_chg->usb_psy);
 	}
+
+	schedule_work(&check_dash_status_work);
 
 	return 0;
 }
