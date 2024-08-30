@@ -315,20 +315,9 @@ static const char * const disp_cc_parent_names_5[] = {
 	"hdmipll",
 };
 
-/* Initial configuration for 808MHz rate */
-static const struct alpha_pll_config mmpll0_config = {
-	.l = 0x2a,
-	.alpha = 0x1555,
-	.config_ctl_val = 0x20485699,
-	.config_ctl_hi_val = 0x00002067,
-	.user_ctl_val = 0x1007,
-	.user_ctl_hi_val = 0x00004805,
-};
-
 static struct clk_alpha_pll mmpll0 = {
 	.offset = 0xC000,
 	.regs = clk_alpha_pll_regs[CLK_ALPHA_PLL_TYPE_FABIA],
-	.config = &mmpll0_config,
 	.clkr = {
 		.enable_reg = 0x1E0,
 		.enable_mask = BIT(0),
@@ -365,20 +354,9 @@ static struct clk_alpha_pll_postdiv mmpll0_out_even = {
 	},
 };
 
-/* Initial configuration for 812MHz rate */
-static const struct alpha_pll_config mmpll1_config = {
-	.l = 0x2a,
-	.alpha = 0x4aab,
-	.config_ctl_val = 0x20485699,
-	.config_ctl_hi_val = 0x00002067,
-	.user_ctl_val = 0x1007,
-	.user_ctl_hi_val = 0x00004805,
-};
-
 static struct clk_alpha_pll mmpll1 = {
 	.offset = 0xC050,
 	.regs = clk_alpha_pll_regs[CLK_ALPHA_PLL_TYPE_FABIA],
-	.config = &mmpll1_config,
 	.clkr = {
 		.enable_reg = 0x1E0,
 		.enable_mask = BIT(1),
@@ -3721,8 +3699,6 @@ static int mmcc_msm8998_probe(struct platform_device *pdev)
 
 	msm_mmsscc_oneplus_fixup();
 
-	clk_fabia_pll_configure(&mmpll0, regmap, &mmpll0_config);
-	clk_fabia_pll_configure(&mmpll1, regmap, &mmpll1_config);
 	clk_fabia_pll_configure(&mmpll3, regmap, &mmpll3_config);
 	clk_fabia_pll_configure(&mmpll4, regmap, &mmpll4_config);
 	clk_fabia_pll_configure(&mmpll5, regmap, &mmpll5_config);
