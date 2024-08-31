@@ -86,6 +86,7 @@ static void switch_dev_work(struct work_struct *work)
 	int total = 0, i;
 	bool switch_state[MODE_MAX_NUM];
 
+retry:
 	switch_state[MODE_MUTE] = !gpio_get_value(switch_data->key1_gpio);
 	switch_state[MODE_DO_NOT_DISTURB] = !gpio_get_value(switch_data->key2_gpio);
 	switch_state[MODE_NORMAL] = !gpio_get_value(switch_data->key3_gpio);
@@ -96,9 +97,9 @@ static void switch_dev_work(struct work_struct *work)
 
 		/* Try again if tri-state is transitioning */
 		if (++total > 1) {
-			if (!work_pending(&switch_data->work))
-				queue_work(switch_data->wq, &switch_data->work);
-			return;
+			total = 0;
+			cpu_relax();
+			goto retry;
 		}
 
 		mode = i;
@@ -454,9 +455,9 @@ static int tristate_dev_probe(struct platform_device *pdev)
 
 	// init single thread unbound workqueue
 
-	switch_data->wq = alloc_ordered_workqueue("tsk_switch_wq", 0);
+	switch_data->wq = alloc_workqueue("tsk_switch_wq", WQ_HIGHPRI, 1);
 	if (!switch_data->wq)
-		goto err_request_gpio;
+		switch_data->wq = system_highpri_wq;
 
 	INIT_WORK(&switch_data->work, switch_dev_work);
 
