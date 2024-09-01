@@ -242,7 +242,6 @@
 &pmi8998_haptics {
 	status = "okay";
 	qcom,wave-shape = "sine";
-	qcom,play-mode = "buffer";
 	qcom,wave-samples = <0x28 0x28 0x28 0x28 0x28 0x28 0x28 0x28>;
 	qcom,brake-pattern = <0x3 0x3 0x3 0x3>;
 	qcom,wave-rep-cnt = <1>;
