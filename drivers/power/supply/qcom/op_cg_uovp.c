@@ -16,6 +16,8 @@
 #include "smb-lib.h"
 #include "op_cg_uovp.h"
 
+#define UOVP_VOTER			"UOVP_VOTER"
+
 #define CURRENT_CEIL_DEFAULT   1500000 /* DCP_CURRENT_UA (normal) = 1.5A */
 #define CURRENT_FLOOR_UA       500000  /* SDP_CURRENT_UA = 500mA */
 #define CURRENT_DIFF_UA        250000  /* At least 250mA */
@@ -102,7 +104,7 @@ static int op_cg_current_set(struct op_cg_uovp_data *opdata,
 
 	pr_info("voting ichg_ua=%d", ichg_ua);
 
-	ret = vote(chg->usb_icl_votable, DCP_VOTER,
+	ret = vote(chg->usb_icl_votable, UOVP_VOTER,
 					true, ichg_ua);
 	if (ret) {
 		pr_err("can't set charger max current, ret=%d", ret);
@@ -344,6 +346,7 @@ void op_cg_uovp_enable(struct smb_charger *chg, bool chg_present)
 		pr_info("UOVP is enabled, apsd_bit=0x%d", opdata->apsd_bit);
 	} else {
 		chg->chg_ovp = false;
+		vote(chg->usb_icl_votable, UOVP_VOTER, false, 0);
 		op_cg_configure_uvp(&op_uovp_data, false);
 		memset(opdata, 0, sizeof(*opdata));
 		pr_info("UOVP is disabled");
