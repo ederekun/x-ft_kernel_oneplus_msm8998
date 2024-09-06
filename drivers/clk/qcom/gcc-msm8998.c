@@ -180,7 +180,7 @@ static struct clk_fixed_factor gpll0_early_div = {
 	.div = 2,
 	.hw.init = &(struct clk_init_data){
 		.name = "gpll0_early_div",
-		.parent_names = (const char *[]){ "gpll0" },
+		.parent_names = (const char *[]){ "gpll0_out_main" },
 		.num_parents = 1,
 		.ops = &clk_fixed_factor_ops,
 	},
@@ -259,7 +259,7 @@ static struct clk_gate2 gcc_mmss_gpll0_clk = {
 		.hw.init = &(struct clk_init_data){
 			.name = "gcc_mmss_gpll0_clk",
 			.parent_names = (const char *[]){
-				"gpll0",
+				"gpll0_out_main",
 			},
 			.num_parents = 1,
 			.flags = CLK_SET_RATE_PARENT,
@@ -293,7 +293,7 @@ static struct clk_gate2 gcc_gpu_gpll0_clk = {
 		.hw.init = &(struct clk_init_data){
 			.name = "gcc_gpu_gpll0_clk",
 			.parent_names = (const char *[]){
-				"gpll0",
+				"gpll0_out_main",
 			},
 			.num_parents = 1,
 			.flags = CLK_SET_RATE_PARENT,
