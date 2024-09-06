@@ -43,6 +43,29 @@ static DEFINE_SPINLOCK(suspend_lock);
  * frame length, but less than the idle timer.
  */
 #define CEILING			50000
+
+/*
+ * BUSY_BOOST multiplies the busy_time increment
+ * according to the accumulated busy_bcounter. 
+ * 
+ * Maximum multiplier is <BOOST_MAX> at busy_bcounter=
+ * <BUSY_BMAX - BUSY_BMIN>.
+ * 
+ * Minimum multiplier is <BOOST_MIN> at busy_bcounter=1.
+ * 
+ * Multiplier increases by <BOOST_PERC / 100> per count.
+ */
+#define BOOST_MAX 4
+#define BOOST_MIN 2
+#define BOOST_PERC 20 /* divided by 100 */
+
+#define BUSY_BMAX max(((BOOST_MAX - 1) * 100) / BOOST_PERC, 0)
+#define BUSY_BMIN max(((BOOST_MIN - 1) * 100) / BOOST_PERC, 0)
+#define BUSY_BCLAMPED min(busy_bcounter + BUSY_BMIN, BUSY_BMAX)
+
+#define BUSY_BOOST(busy) \
+	((busy * BUSY_BCLAMPED * BOOST_PERC) / 100)
+
 #define TZ_RESET_ID		0x3
 #define TZ_UPDATE_ID		0x4
 #define TZ_INIT_ID		0x6
@@ -61,6 +84,7 @@ static DEFINE_SPINLOCK(suspend_lock);
 static u64 suspend_time;
 static u64 suspend_start;
 static unsigned long acc_total, acc_relative_busy;
+static unsigned int busy_bcounter;
 
 /*
  * Returns GPU suspend time in millisecond.
@@ -350,6 +374,14 @@ static int tz_get_target_freq(struct devfreq *devfreq, unsigned long *freq)
 	*freq = stats.current_frequency;
 	priv->bin.total_time += stats.total_time;
 	priv->bin.busy_time += stats.busy_time;
+	if ((unsigned int) priv->bin.busy_time < MIN_BUSY)
+		busy_bcounter = 0;
+
+	if (busy_bcounter) {
+		priv->bin.busy_time += BUSY_BOOST(stats.busy_time);
+		if (priv->bin.busy_time > priv->bin.total_time)
+			priv->bin.busy_time = priv->bin.total_time;
+	}
 
 	if (stats.private_data)
 		context_count =  *((int *)stats.private_data);
@@ -373,6 +405,9 @@ static int tz_get_target_freq(struct devfreq *devfreq, unsigned long *freq)
 		pr_err(TAG "bad freq %ld\n", stats.current_frequency);
 		return level;
 	}
+
+	if (busy_bcounter < BUSY_BMAX)
+		busy_bcounter++;
 
 	/*
 	 * If there is an extended block of busy processing,
