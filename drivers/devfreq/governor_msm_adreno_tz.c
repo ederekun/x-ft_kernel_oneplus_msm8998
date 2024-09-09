@@ -378,9 +378,16 @@ static int tz_get_target_freq(struct devfreq *devfreq, unsigned long *freq)
 		busy_bcounter = 0;
 
 	if (busy_bcounter) {
-		priv->bin.busy_time += BUSY_BOOST(stats.busy_time);
+		unsigned long busy_btime = BUSY_BOOST(stats.busy_time);
+
+		priv->bin.busy_time += busy_btime;
 		if (priv->bin.busy_time > priv->bin.total_time)
 			priv->bin.busy_time = priv->bin.total_time;
+
+		/* Allow userspace to see boosted load */
+		stats.busy_time += busy_btime;
+		if (stats.busy_time > stats.total_time)
+			stats.busy_time = stats.total_time;
 	}
 
 	if (stats.private_data)
