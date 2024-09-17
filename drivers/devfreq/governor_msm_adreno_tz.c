@@ -59,8 +59,8 @@ static DEFINE_SPINLOCK(suspend_lock);
 #define BOOST_MIN 2
 #define BOOST_PERC 20 /* divided by 100 */
 
-#define BUSY_BMAX max(((BOOST_MAX - 1) * 100) / BOOST_PERC, 0)
-#define BUSY_BMIN max(((BOOST_MIN - 1) * 100) / BOOST_PERC, 0)
+#define BUSY_BMAX (unsigned int)max(((BOOST_MAX - 1) * 100) / BOOST_PERC, 0)
+#define BUSY_BMIN (unsigned int)max(((BOOST_MIN - 1) * 100) / BOOST_PERC, 0)
 #define BUSY_BCLAMPED min(busy_bcounter + BUSY_BMIN, BUSY_BMAX)
 
 #define BUSY_BOOST(busy) \
