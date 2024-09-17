@@ -8107,6 +8107,10 @@ cpu_cgroup_css_alloc(struct cgroup_subsys_state *parent_css)
 	return &tg->css;
 }
 
+#ifdef CONFIG_UCLAMP_TASK_GROUP
+int cpu_ucassist_init_values(struct cgroup_subsys_state *css);
+#endif
+
 /* Expose task group only after completing cgroup initialization */
 static int cpu_cgroup_css_online(struct cgroup_subsys_state *css)
 {
@@ -8123,6 +8127,8 @@ static int cpu_cgroup_css_online(struct cgroup_subsys_state *css)
 	cpu_util_update_eff(css);
 	rcu_read_unlock();
 	mutex_unlock(&uclamp_mutex);
+
+	cpu_ucassist_init_values(css);
 #endif
 
 	return 0;
@@ -8294,9 +8300,8 @@ capacity_from_percent(char *buf)
 	return req;
 }
 
-static ssize_t cpu_uclamp_write(struct kernfs_open_file *of, char *buf,
-				size_t nbytes, loff_t off,
-				enum uclamp_id clamp_id)
+int cpu_uclamp_write_css(struct cgroup_subsys_state *css, char *buf,
+					enum uclamp_id clamp_id)
 {
 	struct uclamp_request req;
 	struct task_group *tg;
@@ -8310,7 +8315,7 @@ static ssize_t cpu_uclamp_write(struct kernfs_open_file *of, char *buf,
 	mutex_lock(&uclamp_mutex);
 	rcu_read_lock();
 
-	tg = css_tg(of_css(of));
+	tg = css_tg(css);
 	if (tg->uclamp_req[clamp_id].value != req.util)
 		uclamp_se_set(&tg->uclamp_req[clamp_id], req.util, false);
 
@@ -8321,12 +8326,19 @@ static ssize_t cpu_uclamp_write(struct kernfs_open_file *of, char *buf,
 	tg->uclamp_pct[clamp_id] = req.percent;
 
 	/* Update effective clamps to track the most restrictive value */
-	cpu_util_update_eff(of_css(of));
+	cpu_util_update_eff(css);
 
 	rcu_read_unlock();
 	mutex_unlock(&uclamp_mutex);
 
-	return nbytes;
+	return 0;
+}
+
+static ssize_t cpu_uclamp_write(struct kernfs_open_file *of, char *buf,
+				size_t nbytes, loff_t off,
+				enum uclamp_id clamp_id)
+{
+	return cpu_uclamp_write_css(of_css(of), buf, clamp_id) ?: nbytes;
 }
 
 static ssize_t cpu_uclamp_min_write(struct kernfs_open_file *of,
