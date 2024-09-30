@@ -1326,6 +1326,11 @@ static struct clk_gate2 gpll0_out_msscc = {
 		.enable_mask = BIT(2),
 		.hw.init = &(struct clk_init_data) {
 			.name = "gpll0_out_msscc",
+			.parent_names = (const char*[]) {
+				"gpll0_out_main"
+			},
+			.num_parents = 1,
+			.flags = CLK_SET_RATE_PARENT,
 			.ops = &clk_gate2_ops,
 		},
 	},
