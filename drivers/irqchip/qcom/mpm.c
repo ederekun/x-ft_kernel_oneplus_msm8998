@@ -32,6 +32,7 @@
 #include <linux/err.h>
 #include <linux/platform_device.h>
 #include <linux/cpu_pm.h>
+#include <linux/suspend.h>
 #include <asm/arch_timer.h>
 #include <soc/qcom/rpm-notifier.h>
 #include <soc/qcom/lpm_levels.h>
@@ -521,6 +522,9 @@ static irqreturn_t msm_mpm_irq(int irq, void *dev_id)
 	struct irq_desc *desc = NULL;
 	unsigned int reg = MPM_REG_ENABLE;
 
+	/* RPM hardware triggers this IRQ to wakeup system */
+	pm_system_wakeup();
+
 	for (i = 0; i < QCOM_MPM_REG_WIDTH; i++) {
 		value[i] = msm_mpm_read(reg, i);
 		trace_mpm_wakeup_enable_irqs(i, value[i]);
@@ -589,24 +593,15 @@ static int msm_mpm_init(struct device_node *node)
 	dev->ipc_irq = irq;
 
 	ret = request_irq(dev->ipc_irq, msm_mpm_irq,
-		IRQF_TRIGGER_RISING, "mpm",
+		IRQF_TRIGGER_RISING | IRQF_NO_SUSPEND, "mpm",
 		msm_mpm_irq);
 	if (ret) {
 		pr_err("request_irq failed errno: %d\n", ret);
 		goto ipc_irq_err;
 	}
 
-	ret = irq_set_irq_wake(dev->ipc_irq, 1);
-	if (ret) {
-		pr_err("failed to set wakeup irq %lu: %d\n",
-			dev->ipc_irq, ret);
-		goto set_wake_irq_err;
-	}
-
 	return register_system_pm_ops(&pm_ops);
 
-set_wake_irq_err:
-	free_irq(dev->ipc_irq, msm_mpm_irq);
 ipc_irq_err:
 	iounmap(dev->mpm_ipc_reg);
 ipc_reg_err:
