@@ -522,9 +522,6 @@ static irqreturn_t msm_mpm_irq(int irq, void *dev_id)
 	struct irq_desc *desc = NULL;
 	unsigned int reg = MPM_REG_ENABLE;
 
-	/* RPM hardware triggers this IRQ to wakeup system */
-	pm_system_wakeup();
-
 	for (i = 0; i < QCOM_MPM_REG_WIDTH; i++) {
 		value[i] = msm_mpm_read(reg, i);
 		trace_mpm_wakeup_enable_irqs(i, value[i]);
@@ -549,6 +546,10 @@ static irqreturn_t msm_mpm_irq(int irq, void *dev_id)
 
 		msm_mpm_write(MPM_REG_STATUS, i, 0);
 	}
+
+	/* RPM hardware triggers this IRQ to wakeup system */
+	pm_system_wakeup();
+
 	return IRQ_HANDLED;
 }
 
