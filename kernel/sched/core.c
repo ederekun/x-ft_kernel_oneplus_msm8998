@@ -5135,7 +5135,7 @@ unsigned long effective_cpu_util(int cpu, unsigned long util_cfs,
 
 unsigned long sched_cpu_util(int cpu, unsigned long max)
 {
-	return effective_cpu_util(cpu, cpu_util_cfs(cpu), max,
+	return effective_cpu_util(cpu, cpu_util_cfs(cpu, 0), max,
 				  ENERGY_UTIL, NULL);
 }
 #endif /* CONFIG_SMP */
