@@ -5025,6 +5025,9 @@ struct task_struct *idle_task(int cpu)
 }
 
 #ifdef CONFIG_SMP
+inline long
+schedtune_cpu_margin_with(unsigned long util, int cpu, struct task_struct *p);
+
 /*
  * This function computes an effective utilization for the given CPU, to be
  * used for frequency selection given the linear relation: f = u * f_max.
