@@ -6209,10 +6209,10 @@ struct energy_env {
  * utilization of the specified task, whenever the task is currently
  * contributing to the CPU utilization.
  */
-static unsigned long cpu_util_without(int cpu, struct task_struct *p)
+static unsigned long cpu_util_without(int cpu, struct task_struct *p, bool boost)
 {
 	struct cfs_rq *cfs_rq;
-	unsigned int util;
+	unsigned long runnable, util;
 
 #ifdef CONFIG_SCHED_WALT
 	/*
@@ -6223,19 +6223,24 @@ static unsigned long cpu_util_without(int cpu, struct task_struct *p)
 	 */
 	if (likely(!walt_disabled && sysctl_sched_use_walt_cpu_util) &&
 						p->state == TASK_WAKING)
-		return cpu_util_cfs(cpu);
+		return cpu_util_cfs(cpu, boost);
 #endif
 
 	/* Task has no contribution or is new */
 	if (cpu != task_cpu(p) || !READ_ONCE(p->se.avg.last_update_time))
-		return cpu_util_cfs(cpu);
+		return cpu_util_cfs(cpu, boost);
 
 #ifdef CONFIG_SCHED_WALT
-	util = max_t(long, cpu_util_cfs(cpu) - task_util(p), 0);
+	util = max_t(long, cpu_util_cfs(cpu, boost) - task_util(p), 0);
 #else
 
 	cfs_rq = &cpu_rq(cpu)->cfs;
 	util = READ_ONCE(cfs_rq->avg.util_avg);
+
+	if (boost) {
+		runnable = READ_ONCE(cfs_rq->avg.runnable_load_avg);
+		util = max(util, runnable);
+	}
 
 	/* Discount task's util from CPU's util */
 	lsub_positive(&util, task_util(p));
@@ -6267,7 +6272,7 @@ static unsigned long cpu_util_without(int cpu, struct task_struct *p)
 	 * enabled.
 	 */
 	if (sched_feat(UTIL_EST)) {
-		unsigned int estimated =
+		unsigned long estimated =
 			READ_ONCE(cfs_rq->avg.util_est);
 
 		/*
@@ -6311,7 +6316,7 @@ static unsigned long group_max_util(struct energy_env *eenv, int cpu_idx)
 	int cpu;
 
 	for_each_cpu(cpu, sched_group_span(eenv->sg_cap)) {
-		util = cpu_util_without(cpu, eenv->p);
+		util = cpu_util_without(cpu, eenv->p, 1);
 
 		/*
 		 * If we are looking at the target CPU specified by the eenv,
@@ -6357,7 +6362,7 @@ long group_norm_util(struct energy_env *eenv, int cpu_idx)
 	int cpu;
 
 	for_each_cpu(cpu, sched_group_span(eenv->sg)) {
-		util = cpu_util_without(cpu, eenv->p);
+		util = cpu_util_without(cpu, eenv->p, 0);
 
 		/*
 		 * If we are looking at the target CPU specified by the eenv,
@@ -6428,7 +6433,7 @@ static int group_idle_state(struct energy_env *eenv, int cpu_idx)
 	 * achievable when we move the task.
 	 */
 	for_each_cpu(i, sched_group_span(sg))
-		grp_util += cpu_util_cfs(i);
+		grp_util += cpu_util_cfs(i, 0);
 
 	src_in_grp = cpumask_test_cpu(eenv->cpu[EAS_CPU_PRV].cpu_id,
 				      sched_group_span(sg));
@@ -6511,7 +6516,7 @@ static void store_energy_calc_debug_info(struct energy_env *eenv, int cpu_idx, i
 				sched_group_span(eenv->sg));
 
 		for_each_cpu(cpu, &dbg->group_cpumask)
-			dbg->cpu_util[cpu] = cpu_util_cfs(cpu);
+			dbg->cpu_util[cpu] = cpu_util_cfs(cpu, 0);
 
 		eenv->cpu[cpu_idx].debug_idx = debug_idx+1;
 	}
@@ -7057,11 +7062,11 @@ boosted_task_util(struct task_struct *task)
 	return util + margin;
 }
 
-static unsigned long cpu_util_without(int cpu, struct task_struct *p);
+static unsigned long cpu_util_without(int cpu, struct task_struct *p, bool boost);
 
 static unsigned long capacity_spare_without(int cpu, struct task_struct *p)
 {
-	return max_t(long, capacity_of(cpu) - cpu_util_without(cpu, p), 0);
+	return max_t(long, capacity_of(cpu) - cpu_util_without(cpu, p, 0), 0);
 }
 
 /*
@@ -7841,7 +7846,7 @@ static inline int find_best_target(struct task_struct *p, int *backup_cpu,
 			 * so prev_cpu will receive a negative bias due to the double
 			 * accounting. However, the blocked utilization may be zero.
 			 */
-			wake_util = cpu_util_without(i, p);
+			wake_util = cpu_util_without(i, p, 1);
 			new_util = wake_util + task_util_est(p);
 			spare_wake_cap = capacity_orig_of(i) - wake_util;
 
@@ -8265,7 +8270,7 @@ out:
 bool __cpu_overutilized(int cpu, int delta)
 {
 	return (capacity_orig_of(cpu) * 1024) <
-		((cpu_util_cfs(cpu) + delta) * sched_capacity_margin_up[cpu]);
+		((cpu_util_cfs(cpu, 0) + delta) * sched_capacity_margin_up[cpu]);
 }
 
 bool cpu_overutilized(int cpu)
@@ -8273,7 +8278,7 @@ bool cpu_overutilized(int cpu)
 	unsigned long rq_util_min = uclamp_rq_get(cpu_rq(cpu), UCLAMP_MIN);
 	unsigned long rq_util_max = uclamp_rq_get(cpu_rq(cpu), UCLAMP_MAX);
 
-	return !util_fits_cpu(NULL, cpu_util_cfs(cpu), rq_util_min, rq_util_max, cpu);
+	return !util_fits_cpu(NULL, cpu_util_cfs(cpu, 0), rq_util_min, rq_util_max, cpu);
 }
 
 DEFINE_PER_CPU(struct energy_env, eenv_cache);
@@ -10470,7 +10475,7 @@ static inline void update_sg_lb_stats(struct lb_env *env,
 			load = source_load(i, load_idx);
 
 		sgs->group_load += load;
-		sgs->group_util += cpu_util_cfs(i);
+		sgs->group_util += cpu_util_cfs(i, 0);
 		sgs->sum_nr_running += rq->cfs.h_nr_running;
 
 		nr_running = rq->nr_running;
