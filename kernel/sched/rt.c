@@ -1842,7 +1842,7 @@ retry:
 			if (sched_cpu_high_irqload(cpu))
 				continue;
 
-			util = cpu_util_cfs(cpu);
+			util = cpu_util_cfs(cpu, 0);
 
 			if (__cpu_overutilized(cpu, tutil))
 				continue;
