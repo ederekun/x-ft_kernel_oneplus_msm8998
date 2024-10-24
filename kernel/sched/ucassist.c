@@ -34,11 +34,11 @@ static struct ucassist_struct ucassist_data[] = {
 	},
 	[1] = {
 		.name = "foreground",
-		.data = { "50", "0" },
+		.data = { "80", "5" },
 	},
 	[2] = {
 		.name = "background",
-		.data = { "max", "20" },
+		.data = { "50", "0" },
 	},
 	[3] = {
 		.name = "system-background",
