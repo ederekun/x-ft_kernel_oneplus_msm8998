@@ -5203,11 +5203,11 @@ static void op_handle_usb_removal(struct smb_charger *chg)
 	op_battery_temp_region_set(chg, BATT_TEMP_INVALID);
 }
 
-/* Wait for 15 seconds */
-#define DASH_STATUS_WAIT (15 * 1000)
+/* Wait for 10 seconds */
+#define DASH_STATUS_WAIT (10 * 1000)
 
 /* SOC is considered to be stuck after 5 minutes */
-#define DASH_STATUS_RETRIES 20
+#define DASH_STATUS_RETRIES 30
 
 static void check_dash_status(struct work_struct *work)
 {
@@ -5271,6 +5271,18 @@ retry:
 not_charging:
 	pr_warn("fully switch to normal");
 	set_dash_charger_present(false);
+
+	/* 
+	 * Restart charging to ensure that soc doesn't get 
+	 * stuck due to low current after turning off fast charge,
+	 * in cases that the MCU retains its 'semi-disabled' 
+	 * state.
+	 */
+	op_charging_en(g_chg, false);
+	msleep(500);
+	op_charging_en(g_chg, true);
+	op_check_battery_temp(g_chg);
+	smblib_rerun_aicl(g_chg);
 	return;
 
 charging:
