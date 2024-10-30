@@ -8390,7 +8390,7 @@ static int cpu_uclamp_max_show(struct seq_file *sf, void *v)
 	return 0;
 }
 
-static int cpu_uclamp_ls_write_u64(struct cgroup_subsys_state *css,
+int cpu_uclamp_ls_write_u64(struct cgroup_subsys_state *css,
 				   struct cftype *cftype, u64 ls)
 {
 	struct task_group *tg;
