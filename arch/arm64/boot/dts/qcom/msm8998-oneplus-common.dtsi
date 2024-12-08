@@ -242,14 +242,11 @@
 &pmi8998_haptics {
 	status = "okay";
 	qcom,wave-shape = "sine";
-	qcom,wave-samples = <0x28 0x28 0x28 0x28 0x28 0x28 0x28 0x28>;
-	qcom,brake-pattern = <0x3 0x3 0x3 0x3>;
-	qcom,wave-rep-cnt = <1>;
-	qcom,wave-samp-rep-cnt = <1>;
-	qcom,use-play-irq;
 	qcom,wave-play-rate-us = <4255>;
+	qcom,brake-pattern = <0x3 0x3 0x3 0x3>;
 	qcom,lra-auto-res-mode = "qwd";
 	qcom,lra-res-cal-period = <32>;
+	qcom,wave-samples = [28 28 28 28 28 28 28 28];
 };
 
 &spmi_bus {
