@@ -667,28 +667,7 @@ static int msm_dig_cdc_compander_get(struct snd_kcontrol *kcontrol,
 static int msm_dig_cdc_compander_set(struct snd_kcontrol *kcontrol,
 				     struct snd_ctl_elem_value *ucontrol)
 {
-	struct snd_soc_codec *codec = snd_soc_kcontrol_codec(kcontrol);
-	struct msm_dig_priv *dig_cdc = snd_soc_codec_get_drvdata(codec);
-	int comp_idx = ((struct soc_multi_mixer_control *)
-					kcontrol->private_value)->reg;
-	int rx_idx = ((struct soc_multi_mixer_control *)
-					kcontrol->private_value)->shift;
-	int value = ucontrol->value.integer.value[0];
-
-	dev_dbg(codec->dev, "%s: ucontrol->value.integer.value[0] = %ld\n",
-		__func__, ucontrol->value.integer.value[0]);
-
-	if (dig_cdc->version >= DIANGU) {
-		if (!value)
-			dig_cdc->comp_enabled[rx_idx] = 0;
-		else
-			dig_cdc->comp_enabled[rx_idx] = comp_idx;
-	}
-
-	dev_dbg(codec->dev, "%s: msm_dig_cdc->comp[%d]_enabled[%d] = %d\n",
-		__func__, comp_idx, rx_idx,
-		dig_cdc->comp_enabled[rx_idx]);
-
+	/* Disable CDC compander control */
 	return 0;
 }
 
