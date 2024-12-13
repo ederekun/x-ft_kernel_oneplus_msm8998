@@ -3463,18 +3463,18 @@ static int tasha_set_compander(struct snd_kcontrol *kcontrol,
 		    kcontrol->private_value)->shift;
 	int value = ucontrol->value.integer.value[0];
 
-	pr_debug("%s: Compander %d enable current %d, new %d\n",
-		 __func__, comp + 1, tasha->comp_enabled[comp], value);
-	tasha->comp_enabled[comp] = value;
-
 	/* Any specific register configuration for compander */
 	switch (comp) {
 	case COMPANDER_1:
+		/* Disable headphone/headset companders */
+		value = 0;
 		/* Set Gain Source Select based on compander enable/disable */
 		snd_soc_update_bits(codec, WCD9335_HPH_L_EN, 0x20,
 				(value ? 0x00:0x20));
 		break;
 	case COMPANDER_2:
+		/* Disable headphone/headset companders */
+		value = 0;
 		snd_soc_update_bits(codec, WCD9335_HPH_R_EN, 0x20,
 				(value ? 0x00:0x20));
 		break;
@@ -3503,6 +3503,11 @@ static int tasha_set_compander(struct snd_kcontrol *kcontrol,
 		dev_warn(codec->dev, "%s: unknown compander: %d\n",
 			__func__, comp);
 	};
+
+	pr_debug("%s: Compander %d enable current %d, new %d\n",
+		 __func__, comp + 1, tasha->comp_enabled[comp], value);
+	tasha->comp_enabled[comp] = value;
+
 	return 0;
 }
 
