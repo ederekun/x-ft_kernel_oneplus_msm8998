@@ -1012,6 +1012,10 @@ unsigned long uclamp_eff_value(struct task_struct *p, enum uclamp_id clamp_id)
 {
 	struct uclamp_se uc_eff;
 
+	/* Override UCLAMP values when sleeping */
+	if (ucassist_sleep_uclamp_override(clamp_id))
+		return ucassist_sleep_uclamp_val(clamp_id);
+
 	/* Task currently refcounted: use back-annotated (effective) value */
 	if (p->uclamp[clamp_id].active)
 		return (unsigned long)p->uclamp[clamp_id].value;
