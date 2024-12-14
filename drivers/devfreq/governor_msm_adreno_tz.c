@@ -355,6 +355,10 @@ static inline int devfreq_get_freq_level(struct devfreq *devfreq,
 	return -EINVAL;
 }
 
+#ifdef CONFIG_UCLAMP_TASK_GROUP
+void ucassist_input_trigger_ext(void);
+#endif
+
 static int tz_get_target_freq(struct devfreq *devfreq, unsigned long *freq)
 {
 	int result = 0;
@@ -415,6 +419,11 @@ static int tz_get_target_freq(struct devfreq *devfreq, unsigned long *freq)
 
 	if (busy_bcounter < BUSY_BMAX)
 		busy_bcounter++;
+
+#ifdef CONFIG_UCLAMP_TASK_GROUP
+	/* Don't throttle CPU if we're planning to raise GPU freq */
+	ucassist_input_trigger_ext();
+#endif
 
 	/*
 	 * If there is an extended block of busy processing,
