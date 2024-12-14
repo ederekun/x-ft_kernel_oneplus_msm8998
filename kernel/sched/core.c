@@ -1008,13 +1008,9 @@ uclamp_eff_get(struct task_struct *p, enum uclamp_id clamp_id)
 	return uc_req;
 }
 
-unsigned long uclamp_eff_value(struct task_struct *p, enum uclamp_id clamp_id)
+static inline unsigned long __uclamp_eff_value(struct task_struct *p, enum uclamp_id clamp_id)
 {
 	struct uclamp_se uc_eff;
-
-	/* Override UCLAMP values when sleeping */
-	if (ucassist_sleep_uclamp_override(clamp_id))
-		return ucassist_sleep_uclamp_val(clamp_id);
 
 	/* Task currently refcounted: use back-annotated (effective) value */
 	if (p->uclamp[clamp_id].active)
@@ -1023,6 +1019,16 @@ unsigned long uclamp_eff_value(struct task_struct *p, enum uclamp_id clamp_id)
 	uc_eff = uclamp_eff_get(p, clamp_id);
 
 	return (unsigned long)uc_eff.value;
+}
+
+unsigned long uclamp_eff_value(struct task_struct *p, enum uclamp_id clamp_id)
+{
+	unsigned long val = __uclamp_eff_value(p, clamp_id);
+
+	/* Constrain UCLAMP values when sleeping */
+	ucassist_sleep_uclamp_override(clamp_id, &val);
+
+	return val;
 }
 
 /*

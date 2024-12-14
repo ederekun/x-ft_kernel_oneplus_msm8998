@@ -2695,19 +2695,26 @@ static inline unsigned long cpu_util_rt(struct rq *rq)
 #endif
 
 #ifdef CONFIG_UCLAMP_TASK
-bool ucassist_sleep_uclamp_override(enum uclamp_id clamp_id);
-unsigned long ucassist_sleep_uclamp_val(enum uclamp_id clamp_id);
+void ucassist_sleep_uclamp_override(enum uclamp_id clamp_id, 
+				unsigned long *val);
 
 unsigned long uclamp_eff_value(struct task_struct *p, enum uclamp_id clamp_id);
+
+static inline unsigned long __uclamp_rq_get(struct rq *rq,
+					  enum uclamp_id clamp_id)
+{
+	return READ_ONCE(rq->uclamp[clamp_id].value);
+}
 
 static inline unsigned long uclamp_rq_get(struct rq *rq,
 					  enum uclamp_id clamp_id)
 {
-	/* Override UCLAMP values when sleeping */
-	if (ucassist_sleep_uclamp_override(clamp_id))
-		return ucassist_sleep_uclamp_val(clamp_id);
+	unsigned long val = __uclamp_rq_get(rq, clamp_id);
 
-	return READ_ONCE(rq->uclamp[clamp_id].value);
+	/* Constrain UCLAMP values when sleeping */
+	ucassist_sleep_uclamp_override(clamp_id, &val);
+
+	return val;
 }
 
 static inline void uclamp_rq_set(struct rq *rq, enum uclamp_id clamp_id,
