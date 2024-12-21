@@ -199,7 +199,6 @@ static bool msm_is_resample_needed(int input_sr, int output_sr)
 static void msm_pcm_routing_cfg_pp(int port_id, int copp_idx, int topology,
 				   int channels)
 {
-#if 0 /* Disable custom PCM topologies */
 	int rc = 0;
 
 	switch (topology) {
@@ -245,12 +244,10 @@ static void msm_pcm_routing_cfg_pp(int port_id, int copp_idx, int topology,
 		/* custom topology specific feature param handlers */
 		break;
 	}
-#endif
 }
 
 static void msm_pcm_routing_deinit_pp(int port_id, int topology)
 {
-#if 0 /* Disable custom PCM topologies */
 	switch (topology) {
 	case SRS_TRUMEDIA_TOPOLOGY_ID:
 		pr_debug("%s: SRS_TRUMEDIA_TOPOLOGY_ID\n", __func__);
@@ -278,7 +275,6 @@ static void msm_pcm_routing_deinit_pp(int port_id, int topology)
 		/* custom topology specific feature deinit handlers */
 		break;
 	}
-#endif
 }
 
 static void msm_pcm_routng_cfg_matrix_map_pp(struct route_payload payload,
