@@ -75,7 +75,7 @@ static inline int msm_adsp_stream_callback_info(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
-int msm_qti_pp_send_chmix_cfg_cmd(int port_id, int copp_idx,
+static inline int msm_qti_pp_send_chmix_cfg_cmd(int port_id, int copp_idx,
 				  unsigned int session_id, int ip_channel_count,
 				  int out_channel_cnt, int *ch_wght_coeff,
 				  int session_type, int stream_type)
