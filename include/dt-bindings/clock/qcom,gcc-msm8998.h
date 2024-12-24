@@ -188,7 +188,6 @@
 #define GCC_GPU_GPLL0_DIV_CLK			172
 #define GCC_MMSS_GPLL0_CLK			173
 #define GCC_MMSS_GPLL0_DIV_CLK			174
-#define GCC_USB_PHY_CFG_AHB2PHY_CLK		175
 
 /* GCC block resets */
 #define QUSB2PHY_PRIM_BCR			0
