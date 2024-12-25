@@ -1318,7 +1318,7 @@
 		qcom,smmu-disable-htw;
 		qcom,smmu-s1-bypass;
 		qcom,msm-bus,name = "ipa";
-		qcom,msm-bus,num-cases = <5>;
+		qcom,msm-bus,num-cases = <4>;
 		qcom,msm-bus,num-paths = <4>;
 		qcom,msm-bus,vectors-KBps =
 		/* No vote */
@@ -1327,16 +1327,10 @@
 			<1 676 0 0>,
 			 /* SMMU smmu_aggre2_noc_clk */
 			<81 10065 0 0>,
-		/* SVS2 */
+		/* SVS */
 			<90 512 80000 640000>,
 			<90 585 80000 640000>,
 			<1 676 80000 80000>,
-			/* SMMU smmu_aggre2_noc_clk */
-			<81 10065 0 16000>,
-		/* SVS */
-			<90 512 80000 800000>,
-			<90 585 80000 800000>,
-			<1 676 80000 120000>,
 			/* SMMU smmu_aggre2_noc_clk */
 			<81 10065 0 16000>,
 		/* NOMINAL */
@@ -1351,7 +1345,7 @@
 			<1 676 206000 300000>,
 			/* SMMU smmu_aggre2_noc_clk */
 			<81 10065 0 16000>;
-		qcom,bus-vector-names = "MIN", "SVS2", "SVS", "NOMINAL", "TURBO";
+		qcom,bus-vector-names = "MIN", "SVS", "NOMINAL", "TURBO";
 
 		/* smp2p information */
 		qcom,smp2p_map_ipa_1_out {
