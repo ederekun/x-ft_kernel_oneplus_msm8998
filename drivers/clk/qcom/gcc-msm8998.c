@@ -1965,7 +1965,6 @@ static struct clk_branch gcc_cfg_noc_usb3_axi_clk = {
 				"usb30_master_clk_src"
 			},
 			.num_parents = 1,
-			.flags = CLK_SET_RATE_PARENT,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -2191,7 +2190,6 @@ static struct clk_branch gcc_pcie_phy_aux_clk = {
 				"pcie_aux_clk_src"
 			},
 			.num_parents = 1,
-			.flags = CLK_SET_RATE_PARENT,
 			.ops = &clk_branch2_ops,
 		},
 	},
