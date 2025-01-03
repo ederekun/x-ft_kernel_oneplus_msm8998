@@ -2,10 +2,11 @@
 /*
  * kernel/sched/ucassist.c
  *
- * Copyright (C) 2024, Edrick Vince Sinsuan
+ * Copyright (C) 2024-2025, Edrick Vince Sinsuan
  *
  * This provides the kernel a way to configure uclamp values at
- * init and override UCLAMP values during FB_BLANK to save power.
+ * init and override UCLAMP values under certain conditions to 
+ * save power.
  */
 #define pr_fmt(fmt) "ucassist: %s: " fmt, __func__
 
@@ -105,11 +106,35 @@ int cpu_ucassist_init_values(struct cgroup_subsys_state *css)
 	return 0;
 }
 
-#define UCASSIST_INPUT_SLEEP_UCLAMP_MAX	\
-		(SCHED_CAPACITY_SCALE >> 1) /* 50% of max capacity */
-
 /* Disable UCLAMP constraint for 5 seconds after last input */
 #define UCASSIST_TIMER_JIFFIES msecs_to_jiffies(5000)
+
+#define UCLAMP_MAX_PERC 100
+
+/* Prioritize over any constraint values */
+#define UCLAMP_NO_CONSTRAINT (UCLAMP_MAX_PERC + 1)
+
+struct ucassist_task_constraints {
+	const char *css_name;
+	unsigned long uclamp_perc[UCLAMP_CNT];
+};
+
+struct ucassist_constraints {
+	const struct ucassist_task_constraints *task_constraints;
+	unsigned long default_uclamp_perc[UCLAMP_CNT];
+	unsigned int num_task_constraints;
+};
+
+static const struct ucassist_task_constraints input_task_constraints[] = {
+	{ "top-app", { UCLAMP_NO_CONSTRAINT, 50 } },
+	{ "foreground", { UCLAMP_NO_CONSTRAINT, 50 } },
+};
+
+static const struct ucassist_constraints input_constraints = {
+	.default_uclamp_perc = { 0, 25 },
+	.task_constraints = input_task_constraints,
+	.num_task_constraints = ARRAY_SIZE(input_task_constraints),
+};
 
 enum {
 #ifdef CONFIG_FB
@@ -121,12 +146,41 @@ enum {
 
 static unsigned long ucassist_sleep_states = 0;
 
-static inline void ucassist_constrain_uclamp_val(
+static inline void ucassist_constrain_uclamp_val(struct task_struct *p,
+				enum uclamp_id clamp_id, 
 				unsigned long *val,
-				unsigned long constraint)
+				const struct ucassist_constraints *constraint)
 {
-	/* UCLAMP constraint, not max aggregated */
-	*val = min(*val, constraint);
+	unsigned long constraint_val = constraint->default_uclamp_perc[clamp_id];
+	int i;
+
+	if (p != NULL) {
+		/* Set css-specific UCLAMP constraints per task if defined */
+		for (i = 0; i < constraint->num_task_constraints; i++) {
+			struct ucassist_task_constraints tc = constraint->task_constraints[i];
+
+			if (!strcmp(task_css(p, 0)->cgroup->kn->name, tc.css_name)) {
+				constraint_val = tc.uclamp_perc[clamp_id];
+				break;
+			}
+		}
+	} else {
+		/* Max aggregate task constraint values for RQ */
+		for (i = 0; i < constraint->num_task_constraints; i++) {
+			struct ucassist_task_constraints tc = constraint->task_constraints[i];
+			constraint_val = max(constraint_val, tc.uclamp_perc[clamp_id]);
+		}
+	}
+
+	if (constraint_val > UCLAMP_MAX_PERC)
+		return;
+
+	/* Convert constraint from percentage to sched capacity */
+	constraint_val *= SCHED_CAPACITY_SCALE;
+	constraint_val /= UCLAMP_MAX_PERC;
+
+	/* UCLAMP constraint, set minimum */
+	*val = min(*val, constraint_val);
 }
 
 static void ucassist_input_timer_func(unsigned long data) 
@@ -148,9 +202,17 @@ static inline void ucassist_input_trigger_timer(void)
 }
 
 #ifdef CONFIG_FB
-#define UCASSIST_FB_SLEEP_UCLAMP_MIN	0
-#define UCASSIST_FB_SLEEP_UCLAMP_MAX	\
-		(SCHED_CAPACITY_SCALE >> 2) /* 25% of max capacity */
+
+static const struct ucassist_task_constraints fb_task_constraints[] = {
+	{ "top-app", { UCLAMP_NO_CONSTRAINT, 50 } },
+	{ "foreground", { UCLAMP_NO_CONSTRAINT, 25 } },
+};
+
+static const struct ucassist_constraints fb_constraints = {
+	.default_uclamp_perc = { 0, 10 },
+	.task_constraints = fb_task_constraints,
+	.num_task_constraints = ARRAY_SIZE(fb_task_constraints),
+};
 
 static int ucassist_fb_notifier_callback(struct notifier_block *self, 
 				unsigned long event, 
@@ -187,33 +249,33 @@ static struct notifier_block ucassist_fb_notif = {
 	.notifier_call = ucassist_fb_notifier_callback,
 };
 
-static inline void ucassist_fb_sleep_override(enum uclamp_id clamp_id, 
-		unsigned long *val)
+static inline void ucassist_fb_sleep_override(struct task_struct *p,
+				enum uclamp_id clamp_id, 
+				unsigned long *val)
 {
 	if (!test_bit(FB_SLEEP_STATE, &ucassist_sleep_states))
 		return;
 
 	/* Constrain UCLAMP values when framebuffer is off */
-	ucassist_constrain_uclamp_val(val, (clamp_id == UCLAMP_MIN) ?
-			UCASSIST_FB_SLEEP_UCLAMP_MIN :
-			UCASSIST_FB_SLEEP_UCLAMP_MAX);
+	ucassist_constrain_uclamp_val(p, clamp_id, val, 
+			&fb_constraints);
 }
 #else
-static inline void ucassist_fb_sleep_override(enum uclamp_id clamp_id, 
-		unsigned long *val) {}
+static inline void ucassist_fb_sleep_override(struct task_struct *p,
+				enum uclamp_id clamp_id, 
+				unsigned long *val) {}
 #endif
 
-static inline void ucassist_input_sleep_override(enum uclamp_id clamp_id,
-		unsigned long *val)
+static inline void ucassist_input_sleep_override(struct task_struct *p,
+				enum uclamp_id clamp_id,
+				unsigned long *val)
 {
-	if (clamp_id == UCLAMP_MIN)
-		return;
-
 	if (!test_bit(INPUT_SLEEP_STATE, &ucassist_sleep_states))
 		return;
 
 	/* Constrain UCLAMP values when there's no more timer running */
-	ucassist_constrain_uclamp_val(val, UCASSIST_INPUT_SLEEP_UCLAMP_MAX);
+	ucassist_constrain_uclamp_val(p, clamp_id, val, 
+			&input_constraints);
 }
 
 void ucassist_input_trigger_ext(void)
@@ -299,11 +361,12 @@ static struct input_handler ucassist_input_handler = {
 	.id_table       = ucassist_ids,
 };
 
-void ucassist_sleep_uclamp_override(enum uclamp_id clamp_id, 
+void ucassist_sleep_uclamp_override(struct task_struct *p,
+				enum uclamp_id clamp_id, 
 				unsigned long *val)
 {
-	ucassist_input_sleep_override(clamp_id, val);
-	ucassist_fb_sleep_override(clamp_id, val);
+	ucassist_input_sleep_override(p, clamp_id, val);
+	ucassist_fb_sleep_override(p, clamp_id, val);
 }
 
 static int __init ucassist_init(void)
