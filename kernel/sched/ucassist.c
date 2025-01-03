@@ -205,7 +205,7 @@ static inline void ucassist_input_trigger_timer(void)
 
 static const struct ucassist_task_constraints fb_task_constraints[] = {
 	{ "top-app", { UCLAMP_NO_CONSTRAINT, 50 } },
-	{ "foreground", { UCLAMP_NO_CONSTRAINT, 25 } },
+	{ "foreground", { UCLAMP_NO_CONSTRAINT, 35 } },
 };
 
 static const struct ucassist_constraints fb_constraints = {
