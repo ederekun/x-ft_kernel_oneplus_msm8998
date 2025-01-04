@@ -127,7 +127,7 @@ struct ucassist_constraints {
 
 static const struct ucassist_task_constraints input_task_constraints[] = {
 	{ "top-app", { UCLAMP_NO_CONSTRAINT, 50 } },
-	{ "foreground", { UCLAMP_NO_CONSTRAINT, 50 } },
+	{ "foreground", { UCLAMP_NO_CONSTRAINT, 40 } },
 };
 
 static const struct ucassist_constraints input_constraints = {
@@ -204,7 +204,7 @@ static inline void ucassist_input_trigger_timer(void)
 #ifdef CONFIG_FB
 
 static const struct ucassist_task_constraints fb_task_constraints[] = {
-	{ "top-app", { UCLAMP_NO_CONSTRAINT, 50 } },
+	{ "top-app", { UCLAMP_NO_CONSTRAINT, 40 } },
 	{ "foreground", { UCLAMP_NO_CONSTRAINT, 35 } },
 };
 
