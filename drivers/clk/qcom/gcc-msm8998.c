@@ -74,6 +74,16 @@ static const char * const gcc_parent_names_1_ao[] = {
 	"gpll0_ao",
 };
 
+static const struct parent_map gcc_parent_map_1_ahb[] = {
+	{ P_BI_TCXO, 0 },
+	{ P_GPLL0_OUT_MAIN, 1 },
+};
+
+static const char * const gcc_parent_names_1_ahb[] = {
+	"bi_tcxo_ao",
+	"gpll0_out_main",
+};
+
 static const struct parent_map gcc_parent_map_2[] = {
 	{ P_BI_TCXO, 0},
 	{ P_GPLL0_OUT_MAIN, 1 },
@@ -981,6 +991,28 @@ static struct clk_rcg2 gp3_clk_src = {
 	},
 };
 
+static const struct freq_tbl ftbl_hmss_ahb_clk_src[] = {
+	F(  19200000,    P_BI_TCXO,          1,    0,    0),
+	F(  50000000,    P_GPLL0_OUT_MAIN,  12,    0,    0),
+	F( 100000000,    P_GPLL0_OUT_MAIN,   6,    0,    0),
+	{ }
+};
+
+static struct clk_rcg2 hmss_ahb_clk_src = {
+	.cmd_rcgr = 0x48014,
+	.hid_width = 5,
+	.parent_map = gcc_parent_map_1_ahb,
+	.freq_tbl = ftbl_hmss_ahb_clk_src,
+	.clkr.hw.init = &(struct clk_init_data) {
+		.name = "hmss_ahb_clk_src",
+		.parent_names = gcc_parent_names_1_ahb,
+		.num_parents = ARRAY_SIZE(gcc_parent_names_1_ahb),
+		.ops = &clk_rcg2_ops,
+		VDD_DIG_FMAX_MAP3_AO(LOWER, 19200000, LOW, 50000000,
+					NOMINAL, 100000000),
+	},
+};
+
 static struct freq_tbl ftbl_hmss_rbcpr_clk_src[] = {
 	F(  19200000,     P_BI_TCXO,    1,    0,     0),
 	{ }
@@ -1215,6 +1247,24 @@ static struct clk_rcg2 hmss_gpll0_clk_src = {
 		.num_parents = ARRAY_SIZE(gcc_parent_names_1_ao),
 		.ops = &clk_rcg2_ops,
 		VDD_DIG_FMAX_MAP1_AO(LOWER, 600000000),
+	},
+};
+
+static struct clk_branch gcc_hmss_ahb_clk = {
+	.halt_reg = 0x48000,
+	.halt_check = BRANCH_HALT_VOTED,
+	.clkr = {
+		.enable_reg = 0x52004,
+		.enable_mask = BIT(21),
+		.hw.init = &(struct clk_init_data) {
+			.name = "gcc_hmss_ahb_clk",
+			.parent_names = (const char*[]) {
+				"hmss_ahb_clk_src",
+			},
+			.num_parents = 1,
+			.flags = CLK_IS_CRITICAL | CLK_SET_RATE_PARENT,
+			.ops = &clk_branch2_ops,
+		},
 	},
 };
 
@@ -3013,6 +3063,7 @@ static struct clk_regmap *gcc_msm8998_clocks[] = {
 	[GP1_CLK_SRC] = &gp1_clk_src.clkr,
 	[GP2_CLK_SRC] = &gp2_clk_src.clkr,
 	[GP3_CLK_SRC] = &gp3_clk_src.clkr,
+	[HMSS_AHB_CLK_SRC] = &hmss_ahb_clk_src.clkr,
 	[HMSS_RBCPR_CLK_SRC] = &hmss_rbcpr_clk_src.clkr,
 	[PDM2_CLK_SRC] = &pdm2_clk_src.clkr,
 	[SDCC2_APPS_CLK_SRC] = &sdcc2_apps_clk_src.clkr,
@@ -3071,6 +3122,7 @@ static struct clk_regmap *gcc_msm8998_clocks[] = {
 	[GCC_GPU_CFG_AHB_CLK] = &gcc_gpu_cfg_ahb_clk.clkr,
 	[GCC_GPU_IREF_CLK] = &gcc_gpu_iref_clk.clkr,
 	[GCC_HMSS_DVM_BUS_CLK] = &gcc_hmss_dvm_bus_clk.clkr,
+	[GCC_HMSS_AHB_CLK] = &gcc_hmss_ahb_clk.clkr,
 	[GCC_HMSS_RBCPR_CLK] = &gcc_hmss_rbcpr_clk.clkr,
 	[GCC_MMSS_NOC_CFG_AHB_CLK] = &gcc_mmss_noc_cfg_ahb_clk.clkr,
 	[GCC_MMSS_SYS_NOC_AXI_CLK] = &gcc_mmss_sys_noc_axi_clk.clkr,
@@ -3213,10 +3265,10 @@ static int gcc_msm8998_probe(struct platform_device *pdev)
 		return PTR_ERR(regmap);
 
 	/*
-	 * Clear the HMSS_AHB_CLK_ENA bit to allow the gcc_hmss_ahb_clk clock
-	 * to be gated by RPM during VDD_MIN.
+	 * Set the HMSS_AHB_CLK_SLEEP_ENA bit to allow the hmss_ahb_clk to be
+	 * turned off by hardware during certain apps low power modes.
 	 */
-	ret = regmap_update_bits(regmap, 0x52004, BIT(21), 0);
+	ret = regmap_update_bits(regmap, 0x52008, BIT(21), BIT(21));
 	if (ret)
 		return ret;
 
