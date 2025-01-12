@@ -74,6 +74,16 @@ static const char * const gcc_parent_names_1_ao[] = {
 	"gpll0_ao",
 };
 
+static const struct parent_map gcc_parent_map_1_ahb[] = {
+	{ P_BI_TCXO, 0 },
+	{ P_GPLL0_OUT_MAIN, 1 },
+};
+
+static const char * const gcc_parent_names_1_ahb[] = {
+	"bi_tcxo_ao",
+	"gpll0_out_main",
+};
+
 static const struct parent_map gcc_parent_map_2[] = {
 	{ P_BI_TCXO, 0},
 	{ P_GPLL0_OUT_MAIN, 1 },
@@ -983,23 +993,23 @@ static struct clk_rcg2 gp3_clk_src = {
 
 static const struct freq_tbl ftbl_hmss_ahb_clk_src[] = {
 	F(  19200000,    P_BI_TCXO,          1,    0,    0),
-	F(  37500000,    P_GPLL0_OUT_MAIN,  16,    0,    0),
-	F(  75000000,    P_GPLL0_OUT_MAIN,   8,    0,    0),
+	F(  50000000,    P_GPLL0_OUT_MAIN,  12,    0,    0),
+	F( 100000000,    P_GPLL0_OUT_MAIN,   6,    0,    0),
 	{ }
 };
 
 static struct clk_rcg2 hmss_ahb_clk_src = {
 	.cmd_rcgr = 0x48014,
 	.hid_width = 5,
-	.parent_map = gcc_parent_map_1_ao,
+	.parent_map = gcc_parent_map_1_ahb,
 	.freq_tbl = ftbl_hmss_ahb_clk_src,
 	.clkr.hw.init = &(struct clk_init_data) {
 		.name = "hmss_ahb_clk_src",
-		.parent_names = gcc_parent_names_1_ao,
-		.num_parents = ARRAY_SIZE(gcc_parent_names_1_ao),
+		.parent_names = gcc_parent_names_1_ahb,
+		.num_parents = ARRAY_SIZE(gcc_parent_names_1_ahb),
 		.ops = &clk_rcg2_ops,
 		VDD_DIG_FMAX_MAP3_AO(LOWER, 19200000, LOW, 50000000,
-					NOMINAL, 75000000),
+					NOMINAL, 100000000),
 	},
 };
 
