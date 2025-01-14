@@ -458,6 +458,7 @@
 		pm8998_l26: regulator-l26 {
 			regulator-min-microvolt = <1200000>;
 			regulator-max-microvolt = <1200000>;
+			regulator-always-on;
 			status = "okay";
 		};
 	};
