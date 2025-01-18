@@ -242,8 +242,8 @@
 			regulator-max-microvolt = <800000>;
 			qcom,init-voltage = <800000>;
 			qcom,init-ldo-mode = <0>;
-			/* Force NPM follows HW0_EN */
-			qcom,init-pin-ctrl-mode = <1>;
+			/* Enable follows HW_EN0 */
+			qcom,enable-with-pin-ctrl = <0 1>;
 			status = "okay";
 		};
 	};
@@ -266,21 +266,9 @@
 			regulator-max-microvolt = <1800000>;
 			qcom,init-voltage = <1800000>;
 			qcom,init-ldo-mode = <0>;
-			status = "okay";
-		};
-
-		pm8998_l7_pin_ctrl: regulator-l7-pin-ctrl {
-			compatible = "qcom,rpm-smd-regulator";
-			regulator-name = "pm8998_l7_pin_ctrl";
-			qcom,set = <3>;
-			regulator-min-microvolt = <1800000>;
-			regulator-max-microvolt = <1800000>;
-			qcom,init-voltage = <1800000>;
-			qcom,init-ldo-mode = <0>;
-			/* Force NPM follows HW_EN2 */
-			qcom,init-pin-ctrl-mode = <4>;
 			/* Enable follows HW_EN2 */
 			qcom,enable-with-pin-ctrl = <0 4>;
+			status = "okay";
 		};
 	};
 
@@ -393,21 +381,9 @@
 			regulator-max-microvolt = <1304000>;
 			qcom,init-voltage = <1304000>;
 			qcom,init-ldo-mode = <0>;
-			status = "okay";
-		};
-
-		pm8998_l17_pin_ctrl: regulator-l17-pin-ctrl {
-			compatible = "qcom,rpm-smd-regulator";
-			regulator-name = "pm8998_l17_pin_ctrl";
-			qcom,set = <3>;
-			regulator-min-microvolt = <1304000>;
-			regulator-max-microvolt = <1304000>;
-			qcom,init-voltage = <1304000>;
-			qcom,init-ldo-mode = <0>;
-			/* Force NPM follows HW_EN2 */
-			qcom,init-pin-ctrl-mode = <4>;
 			/* Enable follows HW_EN2 */
 			qcom,enable-with-pin-ctrl = <0 4>;
+			status = "okay";
 		};
 	};
 
@@ -495,21 +471,9 @@
 			regulator-max-microvolt = <3312000>;
 			qcom,init-voltage = <3104000>;
 			qcom,init-ldo-mode = <0>;
-			status = "okay";
-		};
-
-		pm8998_l25_pin_ctrl: regulator-l25-pin-ctrl {
-			compatible = "qcom,rpm-smd-regulator";
-			regulator-name = "pm8998_l25_pin_ctrl";
-			qcom,set = <3>;
-			regulator-min-microvolt = <3104000>;
-			regulator-max-microvolt = <3312000>;
-			qcom,init-voltage = <3104000>;
-			qcom,init-ldo-mode = <0>;
-			/* Force NPM follows HW_EN2 */
-			qcom,init-pin-ctrl-mode = <4>;
 			/* Enable follows HW_EN2 */
 			qcom,enable-with-pin-ctrl = <0 4>;
+			status = "okay";
 		};
 	};
 
