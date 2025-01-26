@@ -131,14 +131,16 @@ static unsigned long ucassist_sleep_states = 0;
 static void ucassist_input_timer_func(unsigned long data)
 {
 	set_bit(INPUT_SLEEP_STATE, &ucassist_sleep_states);
-	pr_info("input timer expired\n");
+	pr_debug("input timer expired\n");
 }
 static DEFINE_TIMER(ucassist_input_timer, ucassist_input_timer_func, 0, 0);
 
 static inline void ucassist_input_trigger_timer(void)
 {
-	if (!mod_timer(&ucassist_input_timer, jiffies + UCASSIST_TIMER_JIFFIES))
+	if (!mod_timer(&ucassist_input_timer, jiffies + UCASSIST_TIMER_JIFFIES)) {
 		clear_bit(INPUT_SLEEP_STATE, &ucassist_sleep_states);
+		pr_debug("input timer set\n");
+	}
 }
 
 void ucassist_input_trigger_ext(void)
@@ -247,6 +249,8 @@ static int ucassist_fb_notifier_callback(struct notifier_block *self,
 	} else if (*blank == FB_BLANK_POWERDOWN) {
 		set_bit(FB_SLEEP_STATE, &ucassist_sleep_states);
 	}
+
+	pr_debug("sleep_states = %lu\n", ucassist_sleep_states);
 
 	return 0;
 }
