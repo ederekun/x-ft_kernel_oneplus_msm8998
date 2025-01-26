@@ -1025,8 +1025,8 @@ unsigned long uclamp_eff_value(struct task_struct *p, enum uclamp_id clamp_id)
 {
 	unsigned long val = __uclamp_eff_value(p, clamp_id);
 
-	/* Constrain UCLAMP values when sleeping */
-	ucassist_sleep_uclamp_override(clamp_id, &val);
+	/* Scale UCLAMP values when sleeping */
+	ucassist_sleep_uclamp_scaling(&val);
 
 	return val;
 }

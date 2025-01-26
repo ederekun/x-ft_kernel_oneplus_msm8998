@@ -2695,8 +2695,7 @@ static inline unsigned long cpu_util_rt(struct rq *rq)
 #endif
 
 #ifdef CONFIG_UCLAMP_TASK
-void ucassist_sleep_uclamp_override(enum uclamp_id clamp_id, 
-				unsigned long *val);
+void ucassist_sleep_uclamp_scaling(unsigned long *val);
 
 unsigned long uclamp_eff_value(struct task_struct *p, enum uclamp_id clamp_id);
 
@@ -2711,8 +2710,8 @@ static inline unsigned long uclamp_rq_get(struct rq *rq,
 {
 	unsigned long val = __uclamp_rq_get(rq, clamp_id);
 
-	/* Constrain UCLAMP values when sleeping */
-	ucassist_sleep_uclamp_override(clamp_id, &val);
+	/* Scale UCLAMP values when sleeping */
+	ucassist_sleep_uclamp_scaling(&val);
 
 	return val;
 }

@@ -105,31 +105,30 @@ int cpu_ucassist_init_values(struct cgroup_subsys_state *css)
 	return 0;
 }
 
-#define UCASSIST_INPUT_SLEEP_UCLAMP_MAX	\
-		(SCHED_CAPACITY_SCALE >> 1) /* 50% of max capacity */
-
-/* Disable UCLAMP constraint for 5 seconds after last input */
+/* Disable UCLAMP scaling for 5 seconds after last input */
 #define UCASSIST_TIMER_JIFFIES msecs_to_jiffies(5000)
 
+#define SCHED_CAPACITY_SCALE_PERC(perc) \
+		((SCHED_CAPACITY_SCALE * perc) / 100)
+
 enum {
+	INPUT_SLEEP_STATE = 0,
 #ifdef CONFIG_FB
 	FB_SLEEP_STATE,
 #endif
-	INPUT_SLEEP_STATE,
 	MAX_STATES,
+};
+
+static const unsigned long ucassist_scale_data[] = {
+	[INPUT_SLEEP_STATE] = SCHED_CAPACITY_SCALE_PERC(75),
+#ifdef CONFIG_FB
+	[FB_SLEEP_STATE] = SCHED_CAPACITY_SCALE_PERC(50),
+#endif
 };
 
 static unsigned long ucassist_sleep_states = 0;
 
-static inline void ucassist_constrain_uclamp_val(
-				unsigned long *val,
-				unsigned long constraint)
-{
-	/* UCLAMP constraint, not max aggregated */
-	*val = min(*val, constraint);
-}
-
-static void ucassist_input_timer_func(unsigned long data) 
+static void ucassist_input_timer_func(unsigned long data)
 {
 	set_bit(INPUT_SLEEP_STATE, &ucassist_sleep_states);
 	pr_info("input timer expired\n");
@@ -138,82 +137,8 @@ static DEFINE_TIMER(ucassist_input_timer, ucassist_input_timer_func, 0, 0);
 
 static inline void ucassist_input_trigger_timer(void)
 {
-#ifdef CONFIG_FB
-	if (test_bit(FB_SLEEP_STATE, &ucassist_sleep_states))
-		return;
-#endif
-
 	if (!mod_timer(&ucassist_input_timer, jiffies + UCASSIST_TIMER_JIFFIES))
 		clear_bit(INPUT_SLEEP_STATE, &ucassist_sleep_states);
-}
-
-#ifdef CONFIG_FB
-#define UCASSIST_FB_SLEEP_UCLAMP_MIN	0
-#define UCASSIST_FB_SLEEP_UCLAMP_MAX	\
-		(SCHED_CAPACITY_SCALE >> 2) /* 25% of max capacity */
-
-static int ucassist_fb_notifier_callback(struct notifier_block *self, 
-				unsigned long event, 
-				void *data)
-{
-	struct fb_event *evdata = data;
-	unsigned long prev_states = ucassist_sleep_states;
-	int *blank;
-
-	if (event != FB_EARLY_EVENT_BLANK)
-		return 0;
-
-	if (!evdata || !evdata->data)
-		return 0;
-
-	blank = evdata->data;
-
-	if (*blank == FB_BLANK_UNBLANK) {
-		clear_bit(FB_SLEEP_STATE, &ucassist_sleep_states);
-		ucassist_input_trigger_timer();
-	} else if (*blank == FB_BLANK_POWERDOWN) {
-		set_bit(FB_SLEEP_STATE, &ucassist_sleep_states);
-		if (del_timer(&ucassist_input_timer))
-			set_bit(INPUT_SLEEP_STATE, &ucassist_sleep_states);
-	}
-
-	if (prev_states != ucassist_sleep_states)
-		pr_info("sleep_states = %ld\n", ucassist_sleep_states);
-
-	return 0;
-}
-
-static struct notifier_block ucassist_fb_notif = {
-	.notifier_call = ucassist_fb_notifier_callback,
-};
-
-static inline void ucassist_fb_sleep_override(enum uclamp_id clamp_id, 
-		unsigned long *val)
-{
-	if (!test_bit(FB_SLEEP_STATE, &ucassist_sleep_states))
-		return;
-
-	/* Constrain UCLAMP values when framebuffer is off */
-	ucassist_constrain_uclamp_val(val, (clamp_id == UCLAMP_MIN) ?
-			UCASSIST_FB_SLEEP_UCLAMP_MIN :
-			UCASSIST_FB_SLEEP_UCLAMP_MAX);
-}
-#else
-static inline void ucassist_fb_sleep_override(enum uclamp_id clamp_id, 
-		unsigned long *val) {}
-#endif
-
-static inline void ucassist_input_sleep_override(enum uclamp_id clamp_id,
-		unsigned long *val)
-{
-	if (clamp_id == UCLAMP_MIN)
-		return;
-
-	if (!test_bit(INPUT_SLEEP_STATE, &ucassist_sleep_states))
-		return;
-
-	/* Constrain UCLAMP values when there's no more timer running */
-	ucassist_constrain_uclamp_val(val, UCASSIST_INPUT_SLEEP_UCLAMP_MAX);
 }
 
 void ucassist_input_trigger_ext(void)
@@ -299,26 +224,82 @@ static struct input_handler ucassist_input_handler = {
 	.id_table       = ucassist_ids,
 };
 
-void ucassist_sleep_uclamp_override(enum uclamp_id clamp_id, 
-				unsigned long *val)
+#ifdef CONFIG_FB
+static int ucassist_fb_notifier_callback(struct notifier_block *self, 
+				unsigned long event, 
+				void *data)
 {
-	ucassist_input_sleep_override(clamp_id, val);
-	ucassist_fb_sleep_override(clamp_id, val);
+	struct fb_event *evdata = data;
+	int *blank;
+
+	if (event != FB_EARLY_EVENT_BLANK)
+		return 0;
+
+	if (!evdata || !evdata->data)
+		return 0;
+
+	blank = evdata->data;
+
+	if (*blank == FB_BLANK_UNBLANK) {
+		clear_bit(FB_SLEEP_STATE, &ucassist_sleep_states);
+		/* Trigger input as well to prevent capping wake performance */
+		ucassist_input_trigger_timer();
+	} else if (*blank == FB_BLANK_POWERDOWN) {
+		set_bit(FB_SLEEP_STATE, &ucassist_sleep_states);
+	}
+
+	return 0;
+}
+
+static struct notifier_block ucassist_fb_notif = {
+	.notifier_call = ucassist_fb_notifier_callback,
+};
+#endif
+
+void ucassist_sleep_uclamp_scaling(unsigned long *val)
+{
+	int i;
+
+	if (!*val)
+		return;
+
+	/* Start from the deepest state towards the shallowest */
+	for (i = MAX_STATES - 1; i >= 0; i--) {
+		if (test_bit(i, &ucassist_sleep_states)) {
+			/* Apply a ceiling limit to the UCLAMP value */
+			*val = min(*val, ucassist_scale_data[i]);
+			break;
+		}
+	}
 }
 
 static int __init ucassist_init(void)
 {
-	int ret;
+	int i, ret;
+
+	/* Check values in the scale data for invalid values */
+	for (i = MAX_STATES - 1; i >= 0; i--) {
+		if (ucassist_scale_data[i] > SCHED_CAPACITY_SCALE) {
+			pr_err("Scale value is more than %lu! idx = %d\n",
+						SCHED_CAPACITY_SCALE, i);
+			return -EINVAL;
+		}
+	}
+
+	ret = input_register_handler(&ucassist_input_handler);
+	if (ret) {
+		pr_err("Failed to init input_handler\n");
+		return ret;
+	}
 
 #ifdef CONFIG_FB
 	ret = fb_register_client(&ucassist_fb_notif);
-	if (ret)
+	if (ret) {
 		pr_err("Failed to init fb_notifier\n");
+		input_unregister_handler(&ucassist_input_handler);
+		return ret;
+	}
 #endif
-
-	ret = input_register_handler(&ucassist_input_handler);
-	if (ret)
-		pr_err("Failed to init input_handler\n");
 
 	return 0;
 }
