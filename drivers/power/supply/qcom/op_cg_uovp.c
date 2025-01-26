@@ -100,6 +100,7 @@ static int op_cg_current_set(struct op_cg_uovp_data *opdata,
 				int ichg_ua)
 {
 	struct smb_charger *chg = opdata->chg;
+	int curr_ichg_ua;
 	int ret = 0;
 
 	pr_info("voting ichg_ua=%d", ichg_ua);
@@ -108,6 +109,17 @@ static int op_cg_current_set(struct op_cg_uovp_data *opdata,
 					true, ichg_ua);
 	if (ret) {
 		pr_err("can't set charger max current, ret=%d", ret);
+		goto err;
+	}
+
+	/* Ensure we get the latest vote result */
+	rerun_election(chg->usb_icl_votable);
+
+	curr_ichg_ua = get_effective_result(chg->usb_icl_votable);
+	if (curr_ichg_ua != ichg_ua) {
+		pr_err("current ichg ua does not match vote");
+		/* Let OP_CG_UOVP know that we can't set this value */
+		ret = -EINVAL;
 		goto err;
 	}
 
