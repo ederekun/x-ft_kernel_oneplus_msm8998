@@ -164,11 +164,20 @@ long kgsl_ioctl_helper(struct file *filep, unsigned int cmd, unsigned long arg,
 	return ret;
 }
 
+#ifdef CONFIG_UCLAMP_TASK_GROUP
+void ucassist_input_trigger_ext(void);
+#endif
+
 long kgsl_ioctl(struct file *filep, unsigned int cmd, unsigned long arg)
 {
 	struct kgsl_device_private *dev_priv = filep->private_data;
 	struct kgsl_device *device = dev_priv->device;
 	long ret;
+
+#ifdef CONFIG_UCLAMP_TASK_GROUP
+	/* Don't throttle CPU if we're receiving GPU load */
+	ucassist_input_trigger_ext();
+#endif
 
 	ret = kgsl_ioctl_helper(filep, cmd, arg, kgsl_ioctl_funcs,
 		ARRAY_SIZE(kgsl_ioctl_funcs));
