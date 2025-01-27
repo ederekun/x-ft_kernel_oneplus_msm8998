@@ -25,6 +25,7 @@
 #define CHG_SOFT_OVP_HYST_MV   100
 
 #define DETECT_CNT             3
+#define VOTE_RETRIES           3
 
 #define NO_CHARGER_BIT         0
 #define FAST_CHARGER_BITS \
@@ -102,28 +103,38 @@ static int op_cg_current_set(struct op_cg_uovp_data *opdata,
 	struct smb_charger *chg = opdata->chg;
 	int curr_ichg_ua;
 	int ret = 0;
+	int retries = VOTE_RETRIES;
 
 	pr_info("voting ichg_ua=%d", ichg_ua);
 
-	ret = vote(chg->usb_icl_votable, UOVP_VOTER,
-					true, ichg_ua);
-	if (ret) {
-		pr_err("can't set charger max current, ret=%d", ret);
-		goto err;
+	while (retries-- > 0) {
+		ret = vote(chg->usb_icl_votable, UOVP_VOTER,
+						true, ichg_ua);
+		if (ret) {
+			pr_err("can't set charger max current, ret=%d", ret);
+			goto err;
+		}
+
+		/* Ensure we get the latest vote result */
+		rerun_election(chg->usb_icl_votable);
+
+		curr_ichg_ua = get_effective_result(chg->usb_icl_votable);
+		if (curr_ichg_ua != ichg_ua) {
+			pr_err("current ichg ua does not match vote, rerun AICL");
+			ret = -EINVAL;
+
+			/* Rerun AICL if we're not able to change effective 
+			   vote then try again */
+			vote(chg->usb_icl_votable, UOVP_VOTER, false, 0);
+			smblib_rerun_aicl(chg);
+			msleep(500);
+			continue;
+		}
+
+		power_supply_changed(chg->usb_psy);
+		break;
 	}
 
-	/* Ensure we get the latest vote result */
-	rerun_election(chg->usb_icl_votable);
-
-	curr_ichg_ua = get_effective_result(chg->usb_icl_votable);
-	if (curr_ichg_ua != ichg_ua) {
-		pr_err("current ichg ua does not match vote");
-		/* Let OP_CG_UOVP know that we can't set this value */
-		ret = -EINVAL;
-		goto err;
-	}
-
-	power_supply_changed(chg->usb_psy);
 err:
 	return ret;
 }
