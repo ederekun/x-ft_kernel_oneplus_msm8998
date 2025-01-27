@@ -5241,6 +5241,7 @@ static void op_handle_usb_removal(struct smb_charger *chg)
 	set_prop_fast_switch_to_normal_false(chg);
 	set_usb_switch(chg, false);
 	set_dash_charger_present(false);
+	op_cg_uovp_enable(chg, false);
 
 	chg->chg_ovp = false;
 	chg->dash_on = false;
