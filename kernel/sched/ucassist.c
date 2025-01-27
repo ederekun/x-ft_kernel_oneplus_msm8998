@@ -105,8 +105,8 @@ int cpu_ucassist_init_values(struct cgroup_subsys_state *css)
 	return 0;
 }
 
-/* Disable UCLAMP scaling for 5 seconds after last input */
-#define UCASSIST_TIMER_JIFFIES msecs_to_jiffies(5000)
+/* Disable UCLAMP scaling for 1 second after last input */
+#define UCASSIST_TIMER_JIFFIES msecs_to_jiffies(1000)
 
 #define SCHED_CAPACITY_SCALE_PERC(perc) \
 		((SCHED_CAPACITY_SCALE * perc) / 100)
