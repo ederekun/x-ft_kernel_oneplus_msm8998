@@ -137,10 +137,18 @@ static DEFINE_TIMER(ucassist_input_timer, ucassist_input_timer_func, 0, 0);
 
 static inline void ucassist_input_trigger_timer(void)
 {
+	static DEFINE_SPINLOCK(input_lock);
+	unsigned long flags;
+
+	if (!spin_trylock_irqsave(&input_lock, flags))
+		return;
+
 	if (!mod_timer(&ucassist_input_timer, jiffies + UCASSIST_TIMER_JIFFIES)) {
 		clear_bit(INPUT_SLEEP_STATE, &ucassist_sleep_states);
 		pr_debug("input timer set\n");
 	}
+
+	spin_unlock_irqrestore(&input_lock, flags);
 }
 
 void ucassist_input_trigger_ext(void)
