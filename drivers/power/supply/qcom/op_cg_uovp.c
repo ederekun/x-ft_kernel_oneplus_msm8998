@@ -265,8 +265,9 @@ static void op_cg_detect_uovp(struct op_cg_uovp_data *opdata)
 			return;
 	}
 
-	pr_info("uovp_state=%d last_uovp_state=%d uovp_cnt=%d",
-		opdata->uovp_state, opdata->last_uovp_state, opdata->uovp_cnt);
+	if (opdata->uovp_cnt < DETECT_CNT)
+		pr_info("uovp_state=%d last_uovp_state=%d uovp_cnt=%d",
+			opdata->uovp_state, opdata->last_uovp_state, opdata->uovp_cnt);
 
 	/* Increase the current if over, decrease if under */
 	ret = op_cg_current_inc_dec(opdata, opdata->is_overvolt);
@@ -303,9 +304,10 @@ static void op_cg_detect_normal(struct op_cg_uovp_data *opdata)
 	if (!opdata->last_uovp_state)
 		opdata->not_uovp_cnt++;
 
-	pr_info("uovp_state=%d last_uovp_state=%d not_uovp_cnt=%d",
-		opdata->uovp_state, opdata->last_uovp_state,
-			opdata->not_uovp_cnt);
+	if (opdata->not_uovp_cnt < DETECT_CNT)
+		pr_info("uovp_state=%d last_uovp_state=%d not_uovp_cnt=%d",
+			opdata->uovp_state, opdata->last_uovp_state,
+				opdata->not_uovp_cnt);
 
 	if (chg->chg_ovp) {
 		op_cg_uovp_restore(opdata);
