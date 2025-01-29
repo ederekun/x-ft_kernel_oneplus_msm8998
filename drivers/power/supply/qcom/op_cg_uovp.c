@@ -51,7 +51,6 @@ struct op_cg_uovp_data {
 	bool uovp_state;
 	bool not_uovp_limit;
 	bool is_overvolt;
-	bool config_en;
 
 	bool initialized;
 	bool enable;
@@ -135,40 +134,6 @@ static int op_cg_current_set(struct op_cg_uovp_data *opdata,
 		break;
 	}
 
-err:
-	return ret;
-}
-
-static int op_cg_configure_uvp(struct op_cg_uovp_data *opdata,
-				bool enable)
-{
-	struct smb_charger *chg = opdata->chg;
-	int ret = 0;
-
-	if (opdata->config_en == enable)
-		return ret;
-
-	/* Don't configure for SDP */
-	ret = opdata->apsd_bit & SDP_CHARGER_BIT;
-	if (ret)
-		return ret;
-
-	pr_info("UVP config, en=%d", enable);
-
-	/* Disable USB suspend on collapse */
-	ret = smblib_masked_write(chg, USBIN_AICL_OPTIONS_CFG_REG,
-			SUSPEND_ON_COLLAPSE_USBIN_BIT,
-			enable ? 0 : SUSPEND_ON_COLLAPSE_USBIN_BIT);
-	if (ret < 0) {
-		pr_err("Couldn't set SUSPEND_ON_COLLAPSE_USBIN_BIT rc=%d\n", 
-				ret);
-		goto err;
-	}
-	pr_info("Set SUSPEND_ON_COLLAPSE_USBIN_BIT to en=%d", !enable);
-
-	smblib_rerun_apsd_if_required(chg);
-	smblib_rerun_aicl(chg);
-	opdata->config_en = enable;
 err:
 	return ret;
 }
@@ -258,12 +223,6 @@ static void op_cg_detect_uovp(struct op_cg_uovp_data *opdata)
 
 	if (opdata->last_uovp_state)
 		opdata->uovp_cnt++;
-
-	if (!opdata->is_overvolt && !opdata->config_en) {
-		ret = op_cg_configure_uvp(opdata, true);
-		if (!ret)
-			return;
-	}
 
 	if (opdata->uovp_cnt < DETECT_CNT)
 		pr_info("uovp_state=%d last_uovp_state=%d uovp_cnt=%d",
@@ -372,7 +331,6 @@ void op_cg_uovp_enable(struct smb_charger *chg, bool chg_present)
 	} else {
 		chg->chg_ovp = false;
 		vote(chg->usb_icl_votable, UOVP_VOTER, false, 0);
-		op_cg_configure_uvp(&op_uovp_data, false);
 		memset(opdata, 0, sizeof(*opdata));
 		pr_info("UOVP is disabled");
 	}
