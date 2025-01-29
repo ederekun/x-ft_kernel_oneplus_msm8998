@@ -1792,8 +1792,7 @@
 			 0x140 /* GSI_RING_BASE_ADDR_H */
 			 0x1a4>; /* GSI_IF_STS */
 		qcom,dwc-usb3-msm-tx-fifo-size = <21288>;
-		extcon = <&pmi8998_pdphy>, <&pmi8998_charger>;
-		qcom,pm-qos-latency = <41>; /* CPU-CLUSTER-WFI-LVL latency +1 */
+		extcon = <&pmi8998_pdphy>;
 
 		clocks = <&clock_gcc GCC_USB30_MASTER_CLK>,
 			<&clock_gcc GCC_CFG_NOC_USB3_AXI_CLK>,
@@ -1866,11 +1865,9 @@
 	qusb_phy0: qusb@c012000 {
 		compatible = "qcom,qusb2phy-v2";
 		reg = <0x0c012000 0x2a8>,
-			<0x01fcb24c 0x4>,
-			<0x00188014 0x4>;
+			<0x01fcb24c 0x4>;
 		reg-names = "qusb_phy_base",
-			"tcsr_clamp_dig_n_1p8",
-			"ref_clk_addr";
+			"tcsr_clamp_dig_n_1p8";
 		vdd-supply = <&pm8998_l1>;
 		vdda12-supply = <&pm8998_l2>;
 		vdda18-supply = <&pm8998_l12>;
@@ -1886,7 +1883,6 @@
 					0x0a 0x184
 					0x00 0x240>;
 		phy_type= "utmi";
-		qcom,phy-clk-scheme = "cml";
 
 		clocks = <&clock_rpmcc RPM_SMD_LN_BB_CLK1>,
 			<&clock_gcc GCC_RX1_USB2_CLKREF_CLK>,
