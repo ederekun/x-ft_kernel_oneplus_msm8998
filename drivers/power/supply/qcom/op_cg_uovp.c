@@ -296,8 +296,6 @@ void op_check_charger_uovp(struct smb_charger *chg, int vchg_mv)
 {
 	struct op_cg_uovp_data *opdata = &op_uovp_data;
 
-	pr_info("vchg_mv=%d", vchg_mv);
-
 	if (!opdata->initialized)
 		return;
 
@@ -311,6 +309,8 @@ void op_check_charger_uovp(struct smb_charger *chg, int vchg_mv)
 		opdata->enable = true;
 		return;
 	}
+
+	pr_info("vchg_mv=%d", vchg_mv);
 
 	opdata->vchg_mv = vchg_mv;
 	op_cg_handle_uovp(opdata);
