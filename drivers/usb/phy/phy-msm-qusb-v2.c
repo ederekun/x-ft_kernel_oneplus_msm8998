@@ -45,7 +45,6 @@
 #define CORE_READY_STATUS		BIT(0)
 
 #define QUSB2PHY_PLL_TEST		0x04
-#define CLK_REF_SEL			BIT(7)
 
 #define QUSB2PHY_PORT_TUNE2             QUSB2PHY_TUNE_BASE + 0x84
 
@@ -90,7 +89,6 @@ struct qusb_phy {
 	struct mutex		power_lock;
 	void __iomem		*base;
 	void __iomem		*tune2_efuse_reg;
-	void __iomem		*ref_clk_base;
 	void __iomem		*tcsr_clamp_dig_n;
 
 	struct clk		*ref_clk_src;
@@ -115,7 +113,6 @@ struct qusb_phy {
 	bool			power_enabled_ref;
 	bool			cable_connected;
 	bool			suspended;
-	bool			is_se_clk;
 	bool			rm_pulldown;
 
 	struct regulator_desc	dpdm_rdesc;
@@ -406,7 +403,7 @@ static void qusb_phy_write_seq(void __iomem *base, u32 *seq, int cnt,
 static int qusb_phy_init(struct usb_phy *phy)
 {
 	struct qusb_phy *qphy = container_of(phy, struct qusb_phy, phy);
-	int ret, reset_val = 0;
+	int ret;
 	u8 reg;
 	bool pll_lock_fail = false;
 
@@ -419,23 +416,6 @@ static int qusb_phy_init(struct usb_phy *phy)
 		dev_err(qphy->phy.dev,
 				"Unable to set voltage for vdda33:%d\n", ret);
 		return ret;
-	}
-
-	/*
-	 * ref clock is enabled by default after power on reset. Linux clock
-	 * driver will disable this clock as part of late init if peripheral
-	 * driver(s) does not explicitly votes for it. Linux clock driver also
-	 * does not disable the clock until late init even if peripheral
-	 * driver explicitly requests it and cannot defer the probe until late
-	 * init. Hence, Explicitly disable the clock using register write to
-	 * allow QUSB PHY PLL to lock properly.
-	 */
-	if (qphy->ref_clk_base) {
-		writel_relaxed((readl_relaxed(qphy->ref_clk_base) &
-					~QUSB2PHY_REFCLK_ENABLE),
-					qphy->ref_clk_base);
-		/* Make sure that above write complete to get ref clk OFF */
-		wmb();
 	}
 
 	/* Perform phy reset */
@@ -475,10 +455,6 @@ static int qusb_phy_init(struct usb_phy *phy)
 	writel_relaxed(readl_relaxed(qphy->base + QUSB2PHY_PWR_CTRL1) |
 			PWR_CTRL1_POWR_DOWN,
 			qphy->base + QUSB2PHY_PWR_CTRL1);
-
-	/* save reset value to override based on clk scheme */
-	if (qphy->ref_clk_base)
-		reset_val = readl_relaxed(qphy->base + QUSB2PHY_PLL_TEST);
 
 	if (qphy->qusb_phy_init_seq)
 		qusb_phy_write_seq(qphy->base, qphy->qusb_phy_init_seq,
@@ -520,26 +496,6 @@ static int qusb_phy_init(struct usb_phy *phy)
 
 	/* Require to get phy pll lock successfully */
 	usleep_range(150, 160);
-
-	/* Turn on phy ref_clk if DIFF_CLK else select SE_CLK */
-	if (qphy->ref_clk_base) {
-		if (!qphy->is_se_clk) {
-			reset_val &= ~CLK_REF_SEL;
-			writel_relaxed((readl_relaxed(qphy->ref_clk_base) |
-					QUSB2PHY_REFCLK_ENABLE),
-					qphy->ref_clk_base);
-		} else {
-			reset_val |= CLK_REF_SEL;
-			writel_relaxed(reset_val,
-					qphy->base + QUSB2PHY_PLL_TEST);
-		}
-
-		/* Make sure above write is completed to get PLL source clock */
-		wmb();
-
-		/* Required to get PHY PLL lock successfully */
-		usleep_range(100, 110);
-	}
 
 	reg = readb_relaxed(qphy->base +
 			QUSB2PHY_PLL_COMMON_STATUS_ONE);
@@ -860,7 +816,6 @@ static int qusb_phy_probe(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	struct resource *res;
 	int ret = 0, size = 0;
-	const char *phy_type;
 	bool hold_phy_reset;
 
 	qphy = devm_kzalloc(dev, sizeof(*qphy), GFP_KERNEL);
@@ -906,33 +861,6 @@ static int qusb_phy_probe(struct platform_device *pdev)
 				dev_err(dev, "DT Value for tune2 efuse is invalid.\n");
 				return -EINVAL;
 			}
-		}
-	}
-
-	res = platform_get_resource_byname(pdev, IORESOURCE_MEM,
-							"ref_clk_addr");
-	if (res) {
-		qphy->ref_clk_base = devm_ioremap_nocache(dev,
-				res->start, resource_size(res));
-		if (IS_ERR(qphy->ref_clk_base)) {
-			dev_dbg(dev, "ref_clk_address is not available.\n");
-			return PTR_ERR(qphy->ref_clk_base);
-		}
-
-		ret = of_property_read_string(dev->of_node,
-				"qcom,phy-clk-scheme", &phy_type);
-		if (ret) {
-			dev_err(dev, "error need qsub_phy_clk_scheme.\n");
-			return ret;
-		}
-
-		if (!strcasecmp(phy_type, "cml")) {
-			qphy->is_se_clk = false;
-		} else if (!strcasecmp(phy_type, "cmos")) {
-			qphy->is_se_clk = true;
-		} else {
-			dev_err(dev, "erro invalid qusb_phy_clk_scheme\n");
-			return -EINVAL;
 		}
 	}
 
