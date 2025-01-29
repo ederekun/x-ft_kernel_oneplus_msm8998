@@ -5290,10 +5290,10 @@ static void check_dash_status(struct work_struct *work)
 		prev_soc = val.intval;
 	}
 
-	pr_warn("not charging, will disable dash after %d ms", 
+retry:
+	pr_warn("not charging, will check dash again after %d ms", 
 			DASH_STATUS_WAIT);
 
-retry:
 	/* Ensure the charger has settled before checking again */
 	msleep(DASH_STATUS_WAIT);
 
