@@ -460,6 +460,18 @@
 	qcom,hw-timer-hz = <19200000>;
 };
 
+&devfreq_compute0 {
+	qcom,core-dev-table =
+		< 1900800 MHZ_TO_MBPS( 200,  8) >;
+};
+
+&devfreq_compute4 {
+	qcom,core-dev-table =
+		< 2112000 MHZ_TO_MBPS( 200,  8) >,
+		< 2342400 MHZ_TO_MBPS( 681,  8) >,
+		< 2496000 MHZ_TO_MBPS( 1804, 8) >;
+};
+
 &devfreq_memlat_0 {
 	qcom,core-dev-table =
 		<  300000 MHZ_TO_MBPS( 200,  8) >,
