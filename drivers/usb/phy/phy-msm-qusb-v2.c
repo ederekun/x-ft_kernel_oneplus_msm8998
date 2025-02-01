@@ -51,11 +51,11 @@
 /* Get TUNE2's high nibble value read from efuse */
 #define TUNE2_HIGH_NIBBLE_VAL(val, pos, mask)	((val >> pos) & mask)
 
-#define QUSB2PHY_PORT_INTR_CTRL         0xBC
-#define CHG_DET_INTR_EN                 BIT(4)
-#define DMSE_INTR_HIGH_SEL              BIT(3)
-#define DMSE_INTR_EN                    BIT(2)
-#define DPSE_INTR_HIGH_SEL              BIT(1)
+#define QUSB2PHY_PORT_INTR_CTRL         0x22C
+#define DMSE_INTR_HIGH_SEL              BIT(4)
+#define DPSE_INTR_HIGH_SEL              BIT(3)
+#define CHG_DET_INTR_EN                 BIT(2)
+#define DMSE_INTR_EN                    BIT(1)
 #define DPSE_INTR_EN                    BIT(0)
 
 #define QUSB2PHY_PORT_UTMI_STATUS	0xF4
