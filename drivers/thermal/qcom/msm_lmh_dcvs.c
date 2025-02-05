@@ -730,11 +730,16 @@ static int limits_dcvs_probe(struct platform_device *pdev)
 	}
 
 	if (!hw->is_plat_mit_disabled) {
-		hw->min_freq_reg = devm_ioremap(&pdev->dev, min_reg, 0x4);
-		if (!hw->min_freq_reg) {
-			pr_err("min frequency enable register remap failed\n");
-			ret = -ENOMEM;
-			goto unregister_sensor;
+		if (!hw->is_legacy) {
+			hw->min_freq_reg = devm_ioremap(&pdev->dev, min_reg, 0x4);
+			if (!hw->min_freq_reg) {
+				pr_err("min frequency enable register remap failed\n");
+				ret = -ENOMEM;
+				goto unregister_sensor;
+			}
+		} else {
+			/* Legacy does not support LMH-DCVSh floor mitigation */
+			cd_ops.floor_limit = NULL;
 		}
 	}
 
