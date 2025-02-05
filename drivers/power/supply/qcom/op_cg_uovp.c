@@ -49,7 +49,7 @@ struct op_cg_uovp_data {
 
 	bool last_uovp_state;
 	bool uovp_state;
-	bool not_uovp_limit;
+	bool not_uovp_timeout;
 	bool is_overvolt;
 
 	bool initialized;
@@ -216,7 +216,7 @@ static void op_cg_detect_uovp(struct op_cg_uovp_data *opdata)
 		opdata->uovp_cnt, opdata->vchg_mv);
 
 	opdata->uovp_state = true;
-	opdata->not_uovp_limit = false;
+	opdata->not_uovp_timeout = false;
 
 	if (opdata->not_uovp_cnt)
 		opdata->not_uovp_cnt = 0;
@@ -270,13 +270,18 @@ static void op_cg_detect_normal(struct op_cg_uovp_data *opdata)
 
 	if (chg->chg_ovp) {
 		op_cg_uovp_restore(opdata);
-	} else if (!opdata->not_uovp_limit) {
+	} else {
 		/* Increase the current if not undervolt for @DETECT_CNT iterations */
 		if (opdata->not_uovp_cnt >= DETECT_CNT) {
 			opdata->not_uovp_cnt = 0;
-			ret = op_cg_current_inc_dec(opdata, true);
-			if (ret)
-				opdata->not_uovp_limit = true;
+			if (!opdata->not_uovp_timeout) {
+				ret = op_cg_current_inc_dec(opdata, true);
+				if (ret)
+					opdata->not_uovp_timeout = true;
+			} else {
+				/* Reset timeout and try again next DETECT_CNT */
+				opdata->not_uovp_timeout = false;
+			}
 		}
 	}
 }
