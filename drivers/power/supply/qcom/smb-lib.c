@@ -5290,6 +5290,9 @@ static void check_dash_status(struct work_struct *work)
 		prev_soc = val.intval;
 	}
 
+	/* Disable USBIN collapse */
+	op_set_collapse_fet(g_chg, true);
+
 retry:
 	pr_warn("not charging, will check dash again after %d ms", 
 			DASH_STATUS_WAIT);
@@ -5302,6 +5305,9 @@ retry:
 		pr_warn("still not charging");
 		goto not_charging;
 	}
+
+	/* Reenable USBIN collapse */
+	op_set_collapse_fet(g_chg, false);
 
 	if (prev_soc != -1) {
 		rc = smblib_get_prop_from_bms(g_chg, 
@@ -5344,6 +5350,9 @@ not_charging:
 	op_charging_en(g_chg, true);
 	op_check_battery_temp(g_chg);
 	smblib_rerun_aicl(g_chg);
+
+	/* Reenable USBIN collapse */
+	op_set_collapse_fet(g_chg, false);
 	return;
 
 charging:
