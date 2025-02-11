@@ -2165,7 +2165,7 @@
 			 <&clock_gcc GCC_MSS_CFG_AHB_CLK>,
 			 <&clock_gcc GCC_BIMC_MSS_Q6_AXI_CLK>,
 			 <&clock_gcc GCC_BOOT_ROM_AHB_CLK>,
-			 <&clock_gcc GPLL0_OUT_MSSCC>,
+			 <&clock_gcc GCC_MSS_GPLL0_DIV_CLK_SRC>,
 			 <&clock_gcc GCC_MSS_SNOC_AXI_CLK>,
 			 <&clock_gcc GCC_MSS_MNOC_BIMC_AXI_CLK>,
 			 <&clock_rpmcc RPM_SMD_QDSS_CLK>;

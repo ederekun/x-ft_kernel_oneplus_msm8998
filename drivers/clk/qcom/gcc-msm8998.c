@@ -319,6 +319,18 @@ static struct clk_gate2 gcc_gpu_gpll0_div_clk = {
 	},
 };
 
+static struct clk_gate2 gcc_mss_gpll0_div_clk_src = {
+	.udelay = 1,
+	.clkr = {
+		.enable_reg = 0x5200c,
+		.enable_mask = BIT(2),
+		.hw.init = &(struct clk_init_data) {
+			.name = "gcc_mss_gpll0_div_clk_src",
+			.ops = &clk_gate2_ops,
+		},
+	},
+};
+
 /*
 static struct pll_vote_clk gpll4 = {
 	.en_reg = (void __iomem *)0x52000,
@@ -1318,19 +1330,6 @@ static struct clk_branch gcc_usb3_clkref_clk = {
 		},
 	},
 };
-
-static struct clk_gate2 gpll0_out_msscc = {
-	.udelay = 1,
-	.clkr = {
-		.enable_reg = 0x5200C,
-		.enable_mask = BIT(2),
-		.hw.init = &(struct clk_init_data) {
-			.name = "gpll0_out_msscc",
-			.ops = &clk_gate2_ops,
-		},
-	},
-};
-
 
 static struct clk_branch gcc_aggre1_ufs_axi_clk = {
 	.halt_reg = 0x82028,
@@ -3006,7 +3005,6 @@ static struct clk_regmap *gcc_msm8998_clocks[] = {
 	[USB3_PHY_AUX_CLK_SRC] = &usb3_phy_aux_clk_src.clkr,
 	[HMSS_GPLL0_CLK_SRC] = &hmss_gpll0_clk_src.clkr,
 	[QSPI_REF_CLK_SRC] = &qspi_ref_clk_src.clkr,
-	[GPLL0_OUT_MSSCC] = &gpll0_out_msscc.clkr,
 	[GCC_AGGRE1_UFS_AXI_CLK] = &gcc_aggre1_ufs_axi_clk.clkr,
 	[GCC_AGGRE1_UFS_AXI_HW_CTL_CLK] = &gcc_aggre1_ufs_axi_hw_ctl_clk.clkr,
 	[GCC_AGGRE1_USB3_AXI_CLK] = &gcc_aggre1_usb3_axi_clk.clkr,
@@ -3106,6 +3104,7 @@ static struct clk_regmap *gcc_msm8998_clocks[] = {
 	[GCC_GPU_GPLL0_DIV_CLK] = &gcc_gpu_gpll0_div_clk.clkr,
 	[GCC_MMSS_GPLL0_CLK] = &gcc_mmss_gpll0_clk.clkr,
 	[GCC_MMSS_GPLL0_DIV_CLK] = &gcc_mmss_gpll0_div_clk.clkr,
+	[GCC_MSS_GPLL0_DIV_CLK_SRC] = &gcc_mss_gpll0_div_clk_src.clkr,
 };
 
 static const struct qcom_reset_map gcc_msm8998_resets[] = {
