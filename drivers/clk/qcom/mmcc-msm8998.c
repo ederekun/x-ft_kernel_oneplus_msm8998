@@ -1636,6 +1636,10 @@ static struct clk_branch mmss_camss_cpp_ahb_clk = {
 		.enable_mask = BIT(0),
 		.hw.init = &(struct clk_init_data) {
 			.name = "mmss_camss_cpp_ahb_clk",
+			.parent_names = (const char *[]){
+				"ahb_clk_src",
+			},
+			.num_parents = 1,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -1680,6 +1684,10 @@ static struct clk_branch mmss_camss_cpp_vbif_ahb_clk = {
 		.enable_mask = BIT(0),
 		.hw.init = &(struct clk_init_data) {
 			.name = "mmss_camss_cpp_vbif_ahb_clk",
+			.parent_names = (const char *[]){
+				"ahb_clk_src",
+			},
+			.num_parents = 1,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -1710,6 +1718,10 @@ static struct clk_branch mmss_camss_csi0_ahb_clk = {
 		.enable_mask = BIT(0),
 		.hw.init = &(struct clk_init_data) {
 			.name = "mmss_camss_csi0_ahb_clk",
+			.parent_names = (const char *[]){
+				"ahb_clk_src",
+			},
+			.num_parents = 1,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -1792,6 +1804,10 @@ static struct clk_branch mmss_camss_csi1_ahb_clk = {
 		.enable_mask = BIT(0),
 		.hw.init = &(struct clk_init_data) {
 			.name = "mmss_camss_csi1_ahb_clk",
+			.parent_names = (const char *[]){
+				"ahb_clk_src",
+			},
+			.num_parents = 1,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -1874,6 +1890,10 @@ static struct clk_branch mmss_camss_csi2_ahb_clk = {
 		.enable_mask = BIT(0),
 		.hw.init = &(struct clk_init_data) {
 			.name = "mmss_camss_csi2_ahb_clk",
+			.parent_names = (const char *[]){
+				"ahb_clk_src",
+			},
+			.num_parents = 1,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -1956,6 +1976,10 @@ static struct clk_branch mmss_camss_csi3_ahb_clk = {
 		.enable_mask = BIT(0),
 		.hw.init = &(struct clk_init_data) {
 			.name = "mmss_camss_csi3_ahb_clk",
+			.parent_names = (const char *[]){
+				"ahb_clk_src",
+			},
+			.num_parents = 1,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -2112,6 +2136,10 @@ static struct clk_branch mmss_fd_ahb_clk = {
 		.enable_mask = BIT(0),
 		.hw.init = &(struct clk_init_data) {
 			.name = "mmss_fd_ahb_clk",
+			.parent_names = (const char *[]){
+				"ahb_clk_src",
+			},
+			.num_parents = 1,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -2196,6 +2224,10 @@ static struct clk_branch mmss_camss_ispif_ahb_clk = {
 		.enable_mask = BIT(0),
 		.hw.init = &(struct clk_init_data) {
 			.name = "mmss_camss_ispif_ahb_clk",
+			.parent_names = (const char *[]){
+				"ahb_clk_src",
+			},
+			.num_parents = 1,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -2231,6 +2263,10 @@ static struct clk_branch mmss_camss_jpeg_ahb_clk = {
 		.enable_mask = BIT(0),
 		.hw.init = &(struct clk_init_data) {
 			.name = "mmss_camss_jpeg_ahb_clk",
+			.parent_names = (const char *[]){
+				"ahb_clk_src",
+			},
+			.num_parents = 1,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -2329,6 +2365,10 @@ static struct clk_branch mmss_camss_micro_ahb_clk = {
 		.enable_mask = BIT(0),
 		.hw.init = &(struct clk_init_data) {
 			.name = "mmss_camss_micro_ahb_clk",
+			.parent_names = (const char *[]){
+				"ahb_clk_src",
+			},
+			.num_parents = 1,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -2396,6 +2436,10 @@ static struct clk_branch mmss_camss_top_ahb_clk = {
 		.enable_mask = BIT(0),
 		.hw.init = &(struct clk_init_data) {
 			.name = "mmss_camss_top_ahb_clk",
+			.parent_names = (const char *[]){
+				"ahb_clk_src",
+			},
+			.num_parents = 1,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -2409,6 +2453,10 @@ static struct clk_branch mmss_camss_vfe0_ahb_clk = {
 		.enable_mask = BIT(0),
 		.hw.init = &(struct clk_init_data) {
 			.name = "mmss_camss_vfe0_ahb_clk",
+			.parent_names = (const char *[]){
+				"ahb_clk_src",
+			},
+			.num_parents = 1,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -2457,6 +2505,10 @@ static struct clk_branch mmss_camss_vfe1_ahb_clk = {
 		.enable_mask = BIT(0),
 		.hw.init = &(struct clk_init_data) {
 			.name = "mmss_camss_vfe1_ahb_clk",
+			.parent_names = (const char *[]){
+				"ahb_clk_src",
+			},
+			.num_parents = 1,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -2505,6 +2557,10 @@ static struct clk_branch mmss_camss_vfe_vbif_ahb_clk = {
 		.enable_mask = BIT(0),
 		.hw.init = &(struct clk_init_data) {
 			.name = "mmss_camss_vfe_vbif_ahb_clk",
+			.parent_names = (const char *[]){
+				"ahb_clk_src",
+			},
+			.num_parents = 1,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -2533,6 +2589,10 @@ static struct clk_branch mmss_mdss_ahb_clk = {
 		.enable_mask = BIT(0),
 		.hw.init = &(struct clk_init_data) {
 			.name = "mmss_mdss_ahb_clk",
+			.parent_names = (const char *[]){
+				"ahb_clk_src",
+			},
+			.num_parents = 1,
 			.flags = CLK_ENABLE_HAND_OFF,
 			.ops = &clk_branch2_ops,
 		},
@@ -2856,6 +2916,10 @@ static struct clk_branch mmss_mdss_hdmi_dp_ahb_clk = {
 		.enable_mask = BIT(0),
 		.hw.init = &(struct clk_init_data) {
 			.name = "mmss_mdss_hdmi_dp_ahb_clk",
+			.parent_names = (const char *[]){
+				"ahb_clk_src",
+			},
+			.num_parents = 1,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -3010,19 +3074,6 @@ static struct clk_branch mmss_misc_ahb_clk = {
 	},
 };
 
-static struct clk_branch mmss_misc_cxo_clk = {
-	.halt_reg = 0x00324,
-	.halt_check = BRANCH_HALT,
-	.clkr = {
-		.enable_reg = 0x00324,
-		.enable_mask = BIT(0),
-		.hw.init = &(struct clk_init_data) {
-			.name = "mmss_misc_cxo_clk",
-			.ops = &clk_branch2_ops,
-		},
-	},
-};
-
 static struct clk_branch mmss_mnoc_maxi_clk = {
 	.halt_reg = 0x0F004,
 	.halt_check = BRANCH_HALT,
@@ -3087,6 +3138,10 @@ static struct clk_branch mmss_video_ahb_clk = {
 		.enable_mask = BIT(0),
 		.hw.init = &(struct clk_init_data) {
 			.name = "mmss_video_ahb_clk",
+			.parent_names = (const char *[]){
+				"ahb_clk_src",
+			},
+			.num_parents = 1,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -3150,6 +3205,10 @@ static struct clk_branch mmss_vmem_ahb_clk = {
 		.enable_mask = BIT(0),
 		.hw.init = &(struct clk_init_data) {
 			.name = "mmss_vmem_ahb_clk",
+			.parent_names = (const char *[]){
+				"ahb_clk_src",
+			},
+			.num_parents = 1,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -3431,7 +3490,6 @@ static struct clk_regmap *mmcc_msm8998_clocks[] = {
 	[MMSS_MDSS_ROT_CLK] = &mmss_mdss_rot_clk.clkr,
 	[MMSS_MDSS_VSYNC_CLK] = &mmss_mdss_vsync_clk.clkr,
 	[MMSS_MISC_AHB_CLK] = &mmss_misc_ahb_clk.clkr,
-	[MMSS_MISC_CXO_CLK] = &mmss_misc_cxo_clk.clkr,
 	[MMSS_MNOC_AHB_CLK] = &mmss_mnoc_ahb_clk.clkr,
 	[MMSS_VIDEO_SUBCORE0_CLK] = &mmss_video_subcore0_clk.clkr,
 	[MMSS_VIDEO_SUBCORE1_CLK] = &mmss_video_subcore1_clk.clkr,
