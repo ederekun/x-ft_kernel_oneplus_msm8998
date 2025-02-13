@@ -83,7 +83,7 @@ static const struct parent_map gcc_parent_map_2[] = {
 static const char * const gcc_parent_names_2[] = {
 	"bi_tcxo",
 	"gpll0_out_main",
-	"gpll0_early_div",
+	"gpll0_out_main",
 };
 
 static const struct parent_map gcc_parent_map_4[] = {
@@ -121,7 +121,7 @@ static const char * const gcc_parent_names_6[] = {
 	"bi_tcxo",
 	"gpll0_out_main",
 	"sleep_clk",
-	"gpll0_early_div",
+	"gpll0_out_main",
 };
 
 static const struct parent_map gcc_parent_map_7[] = {
@@ -172,17 +172,6 @@ static struct clk_alpha_pll gpll0 = {
 			.num_parents = 1,
 			.ops = &clk_alpha_pll_fixed_fabia_ops,
 		}
-	},
-};
-
-static struct clk_fixed_factor gpll0_early_div = {
-	.mult = 1,
-	.div = 2,
-	.hw.init = &(struct clk_init_data){
-		.name = "gpll0_early_div",
-		.parent_names = (const char *[]){ "gpll0_out_main" },
-		.num_parents = 1,
-		.ops = &clk_fixed_factor_ops,
 	},
 };
 
@@ -276,7 +265,7 @@ static struct clk_gate2 gcc_mmss_gpll0_div_clk = {
 		.hw.init = &(struct clk_init_data){
 			.name = "gcc_mmss_gpll0_div_clk",
 			.parent_names = (const char *[]){
-				"gpll0_early_div",
+				"gpll0_out_main",
 			},
 			.num_parents = 1,
 			.flags = CLK_SET_RATE_PARENT,
@@ -310,7 +299,7 @@ static struct clk_gate2 gcc_gpu_gpll0_div_clk = {
 		.hw.init = &(struct clk_init_data){
 			.name = "gcc_gpu_gpll0_div_clk",
 			.parent_names = (const char *[]){
-				"gpll0_early_div",
+				"gpll0_out_main",
 			},
 			.num_parents = 1,
 			.flags = CLK_SET_RATE_PARENT,
@@ -447,7 +436,7 @@ static struct freq_tbl ftbl_blsp_qup_spi_apps_clk_src[] = {
 	F(    960000,	P_BI_TCXO,      10,    1,     2),
 	F(   4800000,	P_BI_TCXO,       4,    0,     0),
 	F(   9600000,	P_BI_TCXO,       2,    0,     0),
-	F(  15000000,	P_GPLL0_EARLY_DIV,   5,    1,     4),
+	F(  15000000,	P_GPLL0_OUT_MAIN,   10,    1,     4),
 	F(  19200000,	P_BI_TCXO,       1,    0,     0),
 	F(  25000000,	P_GPLL0_OUT_MAIN,   12,    1,     2),
 	F(  50000000,	P_GPLL0_OUT_MAIN,   12,    0,     0),
@@ -632,10 +621,10 @@ static struct clk_rcg2 blsp1_qup6_spi_apps_clk_src = {
 };
 
 static struct freq_tbl ftbl_blsp_uart_apps_clk_src[] = {
-	F(   3686400,	P_GPLL0_EARLY_DIV,   1,  192, 15625),
-	F(   7372800,	P_GPLL0_EARLY_DIV,   1,  384, 15625),
-	F(  14745600,	P_GPLL0_EARLY_DIV,   1,  768, 15625),
-	F(  16000000,	P_GPLL0_EARLY_DIV,   1,    4,    75),
+	F(   3686400,   P_GPLL0_OUT_MAIN,    1,   96, 15625),
+	F(   7372800,   P_GPLL0_OUT_MAIN,    1,  192, 15625),
+	F(  14745600,   P_GPLL0_OUT_MAIN,    1,  384, 15625),
+	F(  16000000,   P_GPLL0_OUT_MAIN,    5,    2,    15),
 	F(  19200000,	P_BI_TCXO,       1,    0,     0),
 	F(  24000000,	P_GPLL0_OUT_MAIN,    5,    1,     5),
 	F(  32000000,	P_GPLL0_OUT_MAIN,    1,    4,    75),
@@ -2948,7 +2937,6 @@ static struct clk_debug_mux gcc_debug_mux = {
 static struct clk_hw *gcc_msm8998_hws[] = {
 	[GCC_CE1_AHB_M_CLK] = &gcc_ce1_ahb_m_clk.hw,
 	[GCC_CE1_AXI_M_CLK] = &gcc_ce1_axi_m_clk.hw,
-	[GCC_GPLL0_EARLY_DIV] = &gpll0_early_div.hw,
 };
 
 static struct clk_regmap *gcc_msm8998_clocks[] = {

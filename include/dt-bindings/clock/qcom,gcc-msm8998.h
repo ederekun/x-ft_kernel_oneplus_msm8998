@@ -17,7 +17,6 @@
 #define GCC_BI_TCXO				1
 #define GCC_CE1_AHB_M_CLK			2
 #define GCC_CE1_AXI_M_CLK			3
-#define GCC_GPLL0_EARLY_DIV			4
 
 /* PLLs */
 #define GPLL0					0
