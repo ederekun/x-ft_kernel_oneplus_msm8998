@@ -29,6 +29,7 @@
 #include <linux/timer.h>
 
 #define DRV_NAME "tri-state-key"
+#define OPLUS_TRI_KEY "oplus,tri-state-key"
 
 #define KEYCODE_BASE 600
 #define TOTAL_KEYCODES 6
@@ -63,11 +64,14 @@ struct switch_dev_data {
 	int key2_gpio;
 	int key3_gpio;
 
+	short stored_current_mode;
+
 	struct workqueue_struct *wq;
 	struct work_struct work;
 
 	struct device *dev;
 	struct input_dev *input;
+	struct input_dev *oplus_input;
 	struct switch_dev sdev;
 
 	struct timer_list s_timer;
@@ -79,6 +83,15 @@ struct switch_dev_data {
 static struct switch_dev_data *switch_data;
 
 static DEFINE_RAW_SPINLOCK(switch_lock);
+
+static void switch_dev_report_input(struct input_dev **input, 
+		int keyCode, int mode)
+{
+	input_report_key(*input, keyCode, mode);
+	input_sync(*input);
+	input_report_key(*input, keyCode, 0);
+	input_sync(*input);
+}
 
 static void switch_dev_work(struct work_struct *work)
 {
@@ -112,6 +125,7 @@ retry:
 	}
 
 	raw_spin_lock(&switch_lock);
+	switch_data->stored_current_mode = mode;
 	switch (mode) {
 		case MODE_MUTE:
 			keyCode = keyCode_slider_top;
@@ -127,10 +141,8 @@ retry:
 
 	if (keyCode != current_keyCode) {
 		current_keyCode = keyCode;
-		input_report_key(switch_data->input, keyCode, 1);
-		input_sync(switch_data->input);
-		input_report_key(switch_data->input, keyCode, 0);
-		input_sync(switch_data->input);
+		switch_dev_report_input(&switch_data->input, keyCode, 1);
+		switch_dev_report_input(&switch_data->oplus_input, KEY_F3, mode);
 	}
 }
 
@@ -317,33 +329,111 @@ const struct file_operations proc_keyCode_bottom =
 	.release	= single_release,
 };
 
+static ssize_t proc_tri_state_read(struct file *file, char __user *user_buf,
+		size_t count, loff_t *ppos)
+{
+	int ret = 0;
+	char page[6] = {0};
+	short mode;
+
+	raw_spin_lock(&switch_lock);
+	mode = switch_data->stored_current_mode;
+	raw_spin_unlock(&switch_lock);
+
+	snprintf(page, sizeof(page), "%d\n", mode);
+
+	ret = simple_read_from_buffer(user_buf, count, ppos, page, strlen(page));
+	return ret;
+}
+
+static const struct file_operations proc_tri_state_ops = {
+	.read  = proc_tri_state_read,
+	.open  = simple_open,
+	.owner = THIS_MODULE,
+};
+
+static int tristate_dev_init_trikey_proc(struct device *dev)
+{
+	int ret = 0;
+	struct proc_dir_entry *prEntry_trikey = NULL;
+	struct proc_dir_entry *prEntry_tmp = NULL;
+
+	prEntry_trikey = proc_mkdir("tristatekey", NULL);
+	if (prEntry_trikey == NULL) {
+		ret = -ENOMEM;
+		dev_err(dev, "Couldn't create trikey proc entry\n");
+		goto err;
+	}
+
+	prEntry_tmp = proc_create("tri_state", 0644, prEntry_trikey, &proc_tri_state_ops);
+	if (prEntry_tmp == NULL) {
+		ret = -ENOMEM;
+		dev_err(dev, "Couldn't create proc entry, %d\n");
+	}
+
+err:
+	return ret;
+}
+
+static int tristate_dev_register_input(struct device *dev, 
+		struct input_dev **input, const char *name)
+{
+	int error = 0;
+	int i;
+
+	*input = input_allocate_device();
+	(*input)->name = name;
+	(*input)->dev.parent = dev;
+
+	/* Oplus-specific properties */
+	if (input == &switch_data->oplus_input) {
+		(*input)->id.vendor = 0x22d9;
+
+		set_bit(EV_SYN, (*input)->evbit);
+		set_bit(KEY_F3, (*input)->keybit);
+	} else {
+		for (i = KEYCODE_BASE; i < KEYCODE_BASE + TOTAL_KEYCODES; i++)
+			set_bit(i, (*input)->keybit);
+	}
+
+	set_bit(EV_KEY, (*input)->evbit);
+
+	input_set_drvdata(*input, switch_data);
+
+	error = input_register_device(*input);
+	if (error)
+		dev_err(dev, "Failed to register input device\n");
+
+	return error;
+}
+
+static void tristate_dev_unregister_input(struct input_dev **input)
+{
+	input_unregister_device(*input);
+	input_free_device(*input);
+}
+
 static int tristate_dev_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct proc_dir_entry *procdir;
 	int error = 0;
-	int i;
 
 	switch_data = kzalloc(sizeof(struct switch_dev_data), GFP_KERNEL);
 	switch_data->dev = dev;
 
-	switch_data->input = input_allocate_device();
+	// init input devices
 
-	// init input device
-
-	switch_data->input->name = DRV_NAME;
-	switch_data->input->dev.parent = &pdev->dev;
-
-	set_bit(EV_KEY, switch_data->input->evbit);
-
-	for (i = KEYCODE_BASE; i < KEYCODE_BASE + TOTAL_KEYCODES; i++)
-		set_bit(i, switch_data->input->keybit);
-
-	input_set_drvdata(switch_data->input, switch_data);
-
-	error = input_register_device(switch_data->input);
+	error = tristate_dev_register_input(dev, &switch_data->input, DRV_NAME);
 	if (error) {
 		dev_err(dev, "Failed to register input device\n");
+		goto err_input_device_register;
+	}
+
+	error = tristate_dev_register_input(dev, &switch_data->oplus_input, 
+			OPLUS_TRI_KEY);
+	if (error) {
+		dev_err(dev, "Failed to register oplus input device\n");
 		goto err_input_device_register;
 	}
 
@@ -482,6 +572,12 @@ static int tristate_dev_probe(struct platform_device *pdev)
 
 	// init proc fs
 
+	error = tristate_dev_init_trikey_proc(dev);
+	if (error < 0) {
+		dev_err(dev, "Failed to init trikey proc\n");
+		goto err_request_gpio;
+	}
+
 	procdir = proc_mkdir("tri-state-key", NULL);
 
 	proc_create_data("keyCode_top", 0666, procdir,
@@ -506,8 +602,8 @@ err_set_gpio_input:
 err_switch_dev_register:
 	kfree(switch_data);
 err_input_device_register:
-	input_unregister_device(switch_data->input);
-	input_free_device(switch_data->input);
+	tristate_dev_unregister_input(&switch_data->input);
+	tristate_dev_unregister_input(&switch_data->oplus_input);
 	dev_err(dev, "%s error: %d\n", __func__, error);
 	return error;
 }
