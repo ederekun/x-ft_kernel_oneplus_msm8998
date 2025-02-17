@@ -1119,6 +1119,7 @@ static enum power_supply_property smb2_batt_props[] = {
 	POWER_SUPPLY_PROP_FASTCHG_STARTING,
 	POWER_SUPPLY_CUTOFF_VOLT_WITH_CHARGER,
 	POWER_SUPPLY_PROP_CHARGING_ENABLED,
+	POWER_SUPPLY_PROP_INPUT_CURRENT_MAX,
 	POWER_SUPPLY_PROP_SYSTEM_TEMP_LEVEL,
 	POWER_SUPPLY_PROP_CHARGER_TEMP,
 	POWER_SUPPLY_PROP_CHARGER_TEMP_MAX,
@@ -1168,6 +1169,9 @@ static int smb2_batt_get_prop(struct power_supply *psy,
 		break;
 	case POWER_SUPPLY_PROP_CHARGING_ENABLED:
 		val->intval = chg->chg_enabled;
+		break;
+	case POWER_SUPPLY_PROP_INPUT_CURRENT_MAX:
+		rc = smblib_get_prop_input_current_limited(chg, val);
 		break;
 	case POWER_SUPPLY_PROP_INPUT_SUSPEND:
 		rc = smblib_get_prop_input_suspend(chg, val);
@@ -1427,6 +1431,11 @@ static int smb2_batt_set_prop(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_SWITCH_DASH:
 		rc = check_allow_switch_dash(chg, val);
 		break;
+	case POWER_SUPPLY_PROP_INPUT_CURRENT_MAX:
+		pr_info("set iusb %d mA\n", val->intval);
+		if (val->intval == 900000)
+			op_usb_icl_set(chg, val->intval);
+		break;
 	case POWER_SUPPLY_PROP_CHARGE_NOW:
 		rc = smblib_set_prop_chg_voltage(chg, val);
 		break;
@@ -1443,6 +1452,7 @@ static int smb2_batt_prop_is_writeable(struct power_supply *psy,
 	switch (psp) {
 	case POWER_SUPPLY_PROP_STATUS:
 	case POWER_SUPPLY_PROP_CHARGING_ENABLED:
+	case POWER_SUPPLY_PROP_INPUT_CURRENT_MAX:
 	case POWER_SUPPLY_PROP_INPUT_SUSPEND:
 	case POWER_SUPPLY_PROP_SYSTEM_TEMP_LEVEL:
 	case POWER_SUPPLY_PROP_CAPACITY:
