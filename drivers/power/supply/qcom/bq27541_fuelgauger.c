@@ -982,6 +982,10 @@ static int bq27541_batt_health(struct bq27541_device_info *di)
 	int ret;
 	int health = 0;
 
+	/* Add for get right soc when sleep long time */
+	if (atomic_read(&di->suspended) == 1)
+		return di->health_pre;
+
 	if (di->allow_reading) {
 		ret = bq27541_read(di->cmd_addr.reg_helth,
 				&health, 0, di);
